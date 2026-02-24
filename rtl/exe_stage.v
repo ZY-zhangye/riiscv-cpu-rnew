@@ -1,0 +1,222 @@
+`include "defines.v"
+module exe_stage (
+    input wire clk,
+    input wire rst_n,
+    //握手信号
+    input wire ds_to_es_valid,
+    output wire es_allowin,
+    output wire es_to_ms_valid,
+    input wire ms_allowin,
+    //来自译码阶段的总线
+    input wire [`DS_TO_ES_BUS_WD-1:0] id_exe_bus_in,
+    //输出到访存阶段的总线
+    output wire [`ES_TO_MS_BUS_WD-1:0] exe_mem_bus_out,
+    //数据存储器接口
+    output wire data_sram_en,
+    output wire [3:0] data_sram_wen,
+    output wire [31:0] data_sram_addr,
+    output wire [31:0] data_sram_wdata,
+    //数据前递路径
+    output wire [31:0] exe_id_data,
+    output wire [4:0] exe_id_waddr,
+    output wire exe_id_we,
+    //异常相关信号
+    input wire exception_nop,
+    //跳转指令与分支指令的目标地址与信号
+    output wire [31:0] br_target,
+    output wire br_taken
+);
+
+wire es_ready_go = 1'b1; // EXE 阶段无内部停顿，始终准备好
+reg es_valid;
+assign es_allowin = !es_valid || es_ready_go && ms_allowin;
+assign es_to_ms_valid = es_valid && es_ready_go;
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        es_valid <= 1'b0;
+    end else if (es_allowin) begin
+        es_valid <= ds_to_es_valid;
+    end
+end
+
+// 从译码阶段传来的控制与数据信号
+reg [`DS_TO_ES_BUS_WD-1:0] ds_to_es_bus_r;
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        ds_to_es_bus_r <= 0;
+    end else if (es_allowin && ds_to_es_valid) begin
+        if (exception_nop) begin
+            ds_to_es_bus_r <= 0; // 发生异常时，EXE阶段输出NOP
+        end else begin
+            ds_to_es_bus_r <= id_exe_bus_in; // 正常传递控制与数据
+        end
+    end
+end
+
+// 从打包总线中解包出的控制与数据信号
+wire [31:0] exe_pc;
+wire [31:0] exe_imm;
+wire [31:0] exe_rs1_data;
+wire [31:0] exe_rs2_data;
+wire [2:0] exe_op1_sel;
+wire [1:0] exe_op2_sel;
+wire [16:0] exe_alu_op;
+wire [2:0] exe_br_type;
+wire exe_jmp_flag;
+wire exe_rd_wen;
+wire [4:0] exe_rd_addr;
+wire [1:0] exe_wb_sel;
+wire [3:0] exe_csr_cmd;
+wire exe_csr_we;
+wire [11:0] exe_csr_addr;
+wire [31:0] csr_rdata;
+wire exe_mem_we;
+wire exe_mem_re;
+wire [2:0] exe_mem_size;
+wire [31:0] exe_exception_mtval;
+assign {
+    exe_pc,
+    exe_imm,
+    exe_rs1_data,
+    exe_rs2_data,
+    exe_op1_sel,
+    exe_op2_sel,
+    exe_alu_op,
+    exe_br_type,
+    exe_jmp_flag,
+    exe_rd_wen,
+    exe_rd_addr,
+    exe_wb_sel,
+    exe_csr_cmd,
+    exe_csr_we,
+    exe_csr_addr,
+    csr_rdata,
+    exe_mem_we,
+    exe_mem_re,
+    exe_mem_size,
+    exe_exception_mtval
+} = ds_to_es_bus_r;
+
+// ALU操作数选择
+wire [31:0] op1_data;
+wire [31:0] op2_data;
+assign op1_data = exe_op1_sel[2] ? exe_rs1_data :
+                  exe_op1_sel[1] ? exe_pc :
+                  exe_op1_sel[0] ? exe_imm : 32'b0;
+assign op2_data = |exe_csr_cmd ? csr_rdata :
+                    exe_op2_sel[1] ? exe_rs2_data :
+                    exe_op2_sel[0] ? exe_imm : 32'b0;
+
+// ALU计算结果
+wire ALU_ADD;          //加法
+wire ALU_ADDI;                  //加法（有符号）        
+wire ALU_SUB;           //减法
+wire ALU_AND;           //按位与
+wire ALU_OR;            //按位或
+wire ALU_XOR;           //按位异或
+wire ALU_SLL;           //逻辑左移
+wire ALU_SRL;           //逻辑右移
+wire ALU_SRA;           //算术右移
+wire ALU_SLT;           //有符号比较小于
+wire ALU_SLTU;          //无符号比较小于
+wire ALU_JALR;          //JALR指令的ALU操作（计算跳转地址）
+wire ALU_COPY1;         //仅将第一个操作数传递到EXE阶段（用于CSR指令，ALU不进行计算）
+wire ALU_MUL;           //乘法指令标志（MUL/MULH/MULHU/MULHSU）
+wire ALU_MULH;          
+wire ALU_MULHU;
+wire ALU_MULHSU;
+assign {ALU_ADD, ALU_ADDI, ALU_SUB, ALU_AND, ALU_OR, ALU_XOR,
+        ALU_SLL, ALU_SRL, ALU_SRA, ALU_SLT, ALU_SLTU,
+        ALU_JALR, ALU_COPY1,
+        ALU_MUL, ALU_MULH, ALU_MULHU, ALU_MULHSU} = exe_alu_op;
+
+
+wire [63:0] mul_full,mul_full_hsu,mul_full_hu;
+assign mul_full = $signed(op1_data) * $signed(op2_data);
+assign mul_full_hsu = $signed(op1_data) * $unsigned(op2_data);
+assign mul_full_hu = $unsigned(op1_data) * $unsigned(op2_data);
+wire [31:0] alu_add = op1_data + op2_data;
+wire [31:0] alu_addi = $signed(op1_data) + $signed(op2_data);
+wire [31:0] alu_sub = op1_data - op2_data;
+wire [31:0] alu_and = op1_data & op2_data;
+wire [31:0] alu_or  = op1_data | op2_data;
+wire [31:0] alu_xor = op1_data ^ op2_data;
+wire [31:0] alu_sll = op1_data << op2_data[4:0];
+wire [31:0] alu_srl = op1_data >> op2_data[4:0];
+wire [31:0] alu_sra = ({{32{op1_data[31]}}, op1_data} >> op2_data[4:0]);
+wire [31:0] alu_slt = ($signed(op1_data) < $signed(op2_data)) ? 32'd1 : 32'd0;
+wire [31:0] alu_sltu = (op1_data < op2_data) ? 32'd1 : 32'd0;
+wire [31:0] alu_jalr = (op1_data + op2_data) & ~32'd1;
+wire [31:0] alu_copy1 = csr_rdata;
+wire alu_beq = (exe_rs1_data == exe_rs2_data) ? 1'b1 : 1'b0;
+wire alu_blt = ($signed(exe_rs1_data) < $signed(exe_rs2_data)) ? 1'b1 : 1'b0;
+wire alu_bltu = (exe_rs1_data < exe_rs2_data) ? 1'b1 : 1'b0;
+wire [31:0] alu_mul = mul_full[31:0];
+wire [31:0] alu_mulh = mul_full[63:32];
+wire [31:0] alu_mulhu = mul_full_hu[63:32];
+wire [31:0] alu_mulhsu = mul_full_hsu[63:32];
+
+reg [31:0] alu_result;
+always @(*) begin
+    case (1'b1)
+        ALU_ADD:   alu_result = alu_add;
+        ALU_ADDI:  alu_result = alu_addi;
+        ALU_SUB:   alu_result = alu_sub;
+        ALU_AND:   alu_result = alu_and;
+        ALU_OR:    alu_result = alu_or;
+        ALU_XOR:   alu_result = alu_xor;
+        ALU_SLL:   alu_result = alu_sll;
+        ALU_SRL:   alu_result = alu_srl;
+        ALU_SRA:   alu_result = alu_sra;
+        ALU_SLT:   alu_result = alu_slt;
+        ALU_SLTU:  alu_result = alu_sltu;
+        ALU_JALR:  alu_result = alu_jalr;
+        ALU_COPY1: alu_result = alu_copy1;
+        ALU_MUL:   alu_result = alu_mul;
+        ALU_MULH:  alu_result = alu_mulh;
+        ALU_MULHU: alu_result = alu_mulhu;
+        ALU_MULHSU:alu_result = alu_mulhsu;
+        default:   alu_result = 32'b0;
+    endcase
+end
+
+// 分支比较结果
+wire br_flag = (exe_br_type == 3'b000) ? alu_beq :
+               (exe_br_type == 3'b001) ? ~alu_beq :
+               (exe_br_type == 3'b010) ? alu_blt :
+               (exe_br_type == 3'b011) ? ~alu_blt :
+               (exe_br_type == 3'b100) ? alu_bltu :
+               (exe_br_type == 3'b101) ? ~alu_bltu : 1'b0;
+assign br_taken = exe_jmp_flag || (|exe_br_type && br_flag);
+assign br_target = exe_jmp_flag ? alu_jalr : alu_result;
+
+//访存信号
+assign data_sram_en = exe_mem_re;
+assign data_sram_wen = exe_mem_we && es_valid ? 4'hF : 4'h0; // 32位访存，写使能为1111
+assign data_sram_addr = alu_result;
+assign data_sram_wdata = exe_rs2_data;
+
+//数据前递
+assign exe_id_data = alu_result;
+assign exe_id_waddr = exe_rd_addr;
+assign exe_id_we = exe_rd_wen;
+
+//csr写数据
+wire [31:0] exe_csr_wdata = (exe_csr_cmd == 4'b0010) ? (csr_rdata & ~op1_data) : // CSRC
+                        (exe_csr_cmd == 4'b0011) ? (csr_rdata | op1_data) : // CSRS
+                        (exe_csr_cmd == 4'b0100) ? op1_data : // CSRRW
+                        32'b0; // 其他情况写入0（如不涉及CSR操作的指令）
+
+// 输出到访存阶段的总线打包
+assign exe_mem_bus_out = {
+    exe_pc,         // [31:0] 当前指令地址
+    alu_result,     // [31:0] ALU计算结果
+    exe_rd_addr,    // [4:0] 目的寄存器地址
+    exe_rd_wen,     // 1-bit 目的寄存器写使能
+    exe_wb_sel,     // [1:0] 写回数据选择信号
+    exe_csr_we,     // 1-bit CSR写使能
+    exe_csr_addr,   // [11:0] CSR地址
+    exe_csr_wdata   // [31:0] CSR写数据
+};
+
+endmodule
