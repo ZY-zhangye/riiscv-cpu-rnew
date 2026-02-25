@@ -225,14 +225,14 @@ assign rs2_data = (reg_addr2 == 5'b0) ? 32'b0 :
 //控制信号生成
 wire [2:0] op1_sel; // 送往EXE的第一个操作数选择信号
 wire [1:0] op2_sel; // 送往EXE的第二个操作数选择信号
-wire op1_rs1 = (is_op_imm || is_load || is_store || inst_jalr || inst_csrrw || inst_csrrs || inst_csrrc) ? 1'b1 : 1'b0;
+wire op1_rs1 = (is_op_imm || is_load || is_store || inst_jalr || inst_csrrw || inst_csrrs || inst_csrrc || is_op_reg) ? 1'b1 : 1'b0;
 wire op1_pc = (is_auipc || is_jal || is_jalr || is_branch) ? 1'b1 : 1'b0;
 wire op1_imm = (is_lui || inst_csrrwi || inst_csrrsi || inst_csrrci) ? 1'b1 : 1'b0;
 assign op1_sel = {op1_rs1, op1_pc, op1_imm};
 wire op2_rs2 = (is_op_reg) ? 1'b1 : 1'b0;
-wire op2_imm = (is_op_imm || is_load || is_store || is_jal || is_jalr || is_branch) ? 1'b1 : 1'b0;
+wire op2_imm = (is_op_imm || is_load || is_store || is_jal || is_jalr || is_branch || is_auipc) ? 1'b1 : 1'b0;
 assign op2_sel = {op2_rs2, op2_imm};
-wire rd_wen = (is_op_reg || is_op_imm || is_load || is_lui || is_auipc || is_system) ? 1'b1 : 1'b0;
+wire rd_wen = (is_op_reg || is_op_imm || is_load || is_lui || is_auipc || is_system || is_jal || is_jalr) ? 1'b1 : 1'b0;
 
 //ALU操作类型
 wire ALU_ADD = inst_lw || inst_sw || inst_add || inst_lui || inst_auipc || inst_jal || is_branch;          //加法
@@ -330,7 +330,7 @@ end
 always @ (*) begin
     if (!rst_n) begin
         stall_on_cycle = 1'b0;
-    end else if (prev_load && ((reg_addr1 != 0 && reg_addr1 == rd_out) || (reg_addr2 != 0 && reg_addr2 == rd_out)) && exe_id_es_valid) begin
+    end else if (prev_load && ((reg_addr1 != 0 && reg_addr1 == exe_data_addr) || (reg_addr2 != 0 && reg_addr2 == exe_data_addr)) && exe_id_es_valid) begin
         stall_on_cycle = 1'b1; // 如果当前指令的rs1或rs2与上一条load指令的目的寄存器相同，则需要停顿
     end else begin
         stall_on_cycle = 1'b0;
