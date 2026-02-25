@@ -7,7 +7,12 @@ module regfiles_csr (
     input wire [31:0] csr_wdata,
     //读端口
     input wire [11:0] csr_raddr,
-    output wire [31:0] csr_rdata
+    output wire [31:0] csr_rdata,
+    //异常相关信号
+    input wire [5:0] exception_code,
+    input wire [31:0] exception_mtval,
+    input wire exception_flag,
+    output wire [31:0] exception_addr
 );
 
 reg [31:0] mstatus;
@@ -57,6 +62,16 @@ always @(posedge clk or negedge rst_n) begin
             12'hF13: mimpid <= csr_wdata;
             default: ; // do nothing
         endcase
+    end else begin
+        if (exception_code[5]) begin
+            mepc <= csr_wdata; // 将引起异常的指令地址写入mepc
+            mcause <= {27'b0, exception_code[4:0]}; // 将异常代码写入mcause
+            mtval <= exception_mtval; // 将引起异常的地址或数据写入mtval
+        end else if (& exception_code[4:0]) begin
+            //mret指令，清除异常状态
+            mstatus [3] <= mstatus[7]; // 恢复mstatus中MIE位的值
+            mstatus [7] <= 1'b1; 
+        end
     end
 end
 
@@ -82,5 +97,7 @@ always @(*) begin
 end
 
 assign csr_rdata = csr_rdata_reg;
+assign exception_flag = exception_code[5];
+assign exception_addr = mtvec;
 
 endmodule

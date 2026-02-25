@@ -10,7 +10,15 @@ module if_stage (
     input wire ds_allowin,
     output wire fs_to_ds_valid,
     //译码阶段总线
-    output wire [`FS_TO_DS_BUS_WD-1:0] if_id_bus_out
+    output wire [`FS_TO_DS_BUS_WD-1:0] if_id_bus_out,
+    //分支跳转
+    input wire [31:0] br_target,
+    input wire br_jmp_flag,
+    //异常相关信号
+    output wire [5:0] exception_code_fd,
+    output wire [31:0] exception_mtval_fd,
+    input wire exception_flag,
+    input wire [31:0] exception_addr
 );
 
     localparam nop_inst = 32'h0000_0013; // addi x0, x0, 0
@@ -20,7 +28,9 @@ module if_stage (
     wire [31:0] fs_inst;
 
     assign seq_pc = fs_pc + 4;
-    assign next_pc = seq_pc; 
+    assign next_pc = exception_flag ? exception_addr :
+                     br_jmp_flag ? br_target :
+                     seq_pc;
 
     //握手协议
     reg fs_valid;
@@ -47,6 +57,10 @@ module if_stage (
 
     //输出到译码阶段的总线
     assign if_id_bus_out = {fs_inst, fs_pc};
+
+    //异常相关输出
+    assign exception_code_fd = 6'b000000; // 暂时未定义具体异常类型，后续根据需要进行扩展
+    assign exception_mtval_fd = 32'b0; // 暂时未定义具体异常信息，后续根据需要进行扩展
 
 endmodule
 

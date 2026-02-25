@@ -20,15 +20,21 @@ module exe_stage (
     output wire [31:0] exe_id_data,
     output wire [4:0] exe_id_waddr,
     output wire exe_id_we,
-    //异常相关信号
-    input wire exception_nop,
+    output wire exe_id_es_valid,
     //跳转指令与分支指令的目标地址与信号
     output wire [31:0] br_target,
-    output wire br_taken
+    output wire br_taken,
+    //异常相关信号
+    input wire [5:0] exception_code_de,
+    input wire [31:0] exception_mtval_de,
+    output wire [5:0] exception_code_em,
+    output wire [31:0] exception_mtval_em,
+    input wire exception_flag
 );
 
 wire es_ready_go = 1'b1; // EXE 阶段无内部停顿，始终准备好
 reg es_valid;
+assign exe_id_es_valid = es_valid; // 将EXE阶段的有效信号传递给ID阶段，用于数据前递和冒险检测
 assign es_allowin = !es_valid || es_ready_go && ms_allowin;
 assign es_to_ms_valid = es_valid && es_ready_go;
 always @(posedge clk or negedge rst_n) begin
@@ -41,14 +47,22 @@ end
 
 // 从译码阶段传来的控制与数据信号
 reg [`DS_TO_ES_BUS_WD-1:0] ds_to_es_bus_r;
+reg [5:0] exception_code_reg;
+reg [31:0] exception_mtval_reg;
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         ds_to_es_bus_r <= 0;
+        exception_code_reg <= 0;
+        exception_mtval_reg <= 0;
     end else if (es_allowin && ds_to_es_valid) begin
-        if (exception_nop) begin
+        if (exception_flag || br_taken) begin
             ds_to_es_bus_r <= 0; // 发生异常时，EXE阶段输出NOP
+            exception_code_reg <= 0;
+            exception_mtval_reg <= 0;
         end else begin
             ds_to_es_bus_r <= id_exe_bus_in; // 正常传递控制与数据
+            exception_code_reg <= exception_code_de;
+            exception_mtval_reg <= exception_mtval_de;
         end
     end
 end
@@ -155,6 +169,7 @@ wire [31:0] alu_mul = mul_full[31:0];
 wire [31:0] alu_mulh = mul_full[63:32];
 wire [31:0] alu_mulhu = mul_full_hu[63:32];
 wire [31:0] alu_mulhsu = mul_full_hsu[63:32];
+wire [31:0] alu_csrrc = op2_data & ~op1_data; 
 
 reg [31:0] alu_result;
 always @(*) begin
@@ -181,12 +196,12 @@ always @(*) begin
 end
 
 // 分支比较结果
-wire br_flag = (exe_br_type == 3'b000) ? alu_beq :
-               (exe_br_type == 3'b001) ? ~alu_beq :
-               (exe_br_type == 3'b010) ? alu_blt :
-               (exe_br_type == 3'b011) ? ~alu_blt :
-               (exe_br_type == 3'b100) ? alu_bltu :
-               (exe_br_type == 3'b101) ? ~alu_bltu : 1'b0;
+wire br_flag = (exe_br_type == 3'b001) ? alu_beq :
+               (exe_br_type == 3'b010) ? ~alu_beq :
+               (exe_br_type == 3'b011) ? alu_blt :
+               (exe_br_type == 3'b100) ? ~alu_blt :
+               (exe_br_type == 3'b101) ? alu_bltu :
+               (exe_br_type == 3'b110) ? ~alu_bltu : 1'b0;
 assign br_taken = exe_jmp_flag || (|exe_br_type && br_flag);
 assign br_target = exe_jmp_flag ? alu_jalr : alu_result;
 
@@ -202,9 +217,12 @@ assign exe_id_waddr = exe_rd_addr;
 assign exe_id_we = exe_rd_wen;
 
 //csr写数据
-wire [31:0] exe_csr_wdata = (exe_csr_cmd == 4'b0010) ? (csr_rdata & ~op1_data) : // CSRC
-                        (exe_csr_cmd == 4'b0011) ? (csr_rdata | op1_data) : // CSRS
-                        (exe_csr_cmd == 4'b0100) ? op1_data : // CSRRW
+wire [31:0] exe_csr_wdata = (exe_csr_cmd == 4'b0001) ? op1_data : // CSRRW
+                            (exe_csr_cmd == 4'b0010) ? alu_or : // CSRRS
+                            (exe_csr_cmd == 4'b0011) ? alu_csrrc : // CSRRC
+                            (exe_csr_cmd == 4'b0101) ? op1_data : // CSRRWI
+                            (exe_csr_cmd == 4'b0110) ? alu_or : // CSRRSI
+                            (exe_csr_cmd == 4'b0111) ? alu_csrrc :
                         32'b0; // 其他情况写入0（如不涉及CSR操作的指令）
 
 // 输出到访存阶段的总线打包
@@ -218,5 +236,9 @@ assign exe_mem_bus_out = {
     exe_csr_addr,   // [11:0] CSR地址
     exe_csr_wdata   // [31:0] CSR写数据
 };
+
+// 输出异常相关信号
+assign exception_code_em = exception_code_reg;
+assign exception_mtval_em = exception_mtval_reg;
 
 endmodule

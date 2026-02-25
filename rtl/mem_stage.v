@@ -20,7 +20,13 @@ module mem_stage (
     //数据前递路径
     output wire [31:0] mem_id_data,
     output wire [4:0] mem_id_waddr,
-    output wire mem_id_we
+    output wire mem_id_we,
+    //异常相关信号
+    input wire [5:0] exception_code_em,
+    input wire [31:0] exception_mtval_em,
+    input wire exception_flag,
+    output wire [5:0] exception_code,
+    output wire [31:0] exception_mtval
 );
 
 wire ms_ready_go = 1'b1; // MEM 阶段无内部停顿，始终准备好
@@ -38,6 +44,8 @@ end
 
 // 从执行阶段传来的控制与数据信号
 reg [`ES_TO_MS_BUS_WD-1:0] exe_mem_bus_r;
+reg [5:0] exception_code_em_r;
+reg [31:0] exception_mtval_em_r;
 wire [31:0] mem_pc;
 wire [31:0] alu_result;
 wire [4:0] rd_out;
@@ -60,8 +68,18 @@ assign {
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         exe_mem_bus_r <= 0;
+        exception_code_em_r <= 0;
+        exception_mtval_em_r <= 0;
     end else if (ms_allowin && es_to_ms_valid) begin
-        exe_mem_bus_r <= exe_mem_bus_in;
+        if (exception_flag) begin
+            exe_mem_bus_r <= 0; // 发生异常时，MEM阶段输出NOP
+            exception_code_em_r <= 0;
+            exception_mtval_em_r <= 0;
+        end else begin
+            exe_mem_bus_r <= exe_mem_bus_in; // 正常传递控制与数据
+            exception_code_em_r <= exception_code_em;
+            exception_mtval_em_r <= exception_mtval_em;
+        end
     end
 end
 
@@ -76,16 +94,20 @@ wire [31:0] ms_final_result = (wb_sel == 2'b00) ? alu_result : // ALU结果
 
 // 输出到写回阶段的总线打包
 assign mem_wb_bus_out = {
-    rd_wen,         // 1-bit 寄存器写使能
+    (rd_wen && !exception_flag),         // 1-bit 寄存器写使能
     rd_out,         // [4:0] 目的寄存器地址
     ms_final_result, // [31:0] 最终写回数据
     mem_pc          // [31:0] 当前指令地址
 };
+    
+// 输出异常相关信号
+assign exception_code = exception_code_em_r;
+assign exception_mtval = exception_mtval_em_r;
 
 // 输出CSR相关信号
-assign csr_we = mem_csr_we;
+assign csr_we = mem_csr_we && !exception_flag; // 发生异常时不写CSR
 assign csr_addr = mem_csr_addr;
-assign csr_wdata = mem_csr_wdata;
+assign csr_wdata = exception_code_em_r[5] ? mem_pc : mem_csr_wdata; // 出现异常，复用CSR写数据为当前指令地址，便于异常处理程序获取异常发生的指令地址
 
 // 数据前递路径输出
 assign mem_id_data = ms_final_result;

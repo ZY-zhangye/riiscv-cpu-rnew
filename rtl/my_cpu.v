@@ -1,3 +1,14 @@
+`define MEM_HEX_PATH "C:\\Users\\ZY\\Desktop\\riiscv-cpu-rnew\\hex\\riscv-tests\\rv32ui-p-addi.hex"
+// 加载内存文件
+/*# 定义【标准整数运算指令集】数组 - RV32I 基础指令全集
+UI_INSTS=(sw lw add addi sub and andi or ori xor xori 
+          sll srl sra slli srli srai slt slti sltu sltiu 
+          beq bne blt bge bltu bgeu jal jalr lui auipc lh lhu sh sb lb lbu)
+# 定义【特殊系统指令集】数组 - 包含特权指令/系统调用指令
+MI_INSTS=(csr scall sbreak ma_fetch)*/
+//乘法指令
+// UM_INSTS=(mul mulh mulhu mulhsu)
+
 module my_cpu (
     input wire clk,
     input wire rst_n,
@@ -72,7 +83,10 @@ bridge u_bridge(
     .led(led)
 );
 
-inst_ram u_inst_ram(
+inst_ram  #(
+    .MEM_HEX_PATH(`MEM_HEX_PATH)
+)u_inst_ram
+(
     .clk(clk),
     .rst_n(rst_n),
     .inst_ram_ren(inst_ram_ren),
@@ -82,7 +96,10 @@ inst_ram u_inst_ram(
     .inst_ram_wdata(inst_ram_wdata)
 );
 
-data_ram u_data_ram(
+data_ram  #(
+    .MEM_HEX_PATH(`MEM_HEX_PATH)
+)u_data_ram
+(
     .clk(clk),
     .rst_n(rst_n),
     .data_ram_ren(data_ram_ren),

@@ -33,7 +33,7 @@ initial begin
     $dumpvars(0, tb_top);   // 0表示tb_top模块及其所有子模块
     #25000; // 设定最大结束时间，避免仿真无限进行
     $display("----------------------------------------------");
-    $display("Simulation finished.");
+    $display("Simulation timeout.");
     $stop;
 end
 
@@ -51,8 +51,17 @@ end
 
 always @ (posedge clk) begin
     if (rst_n) begin
-        if (debug_wb_pc == 32'h00000028) begin
-            $display("Test end at PC: %h", debug_wb_pc);
+        if (debug_wb_pc == 32'h00000044) begin
+                $display("---------------------------------------------");
+                $display("Time: %0t", $time);
+                $display("Simulation finished.");
+                $display("----------------------------------------------");
+            if (debug_data == 32'h00000001) begin
+                $display("Test passed.");
+            end else begin
+                $display("Test failed. Expected 1 in x10, got %08h", debug_data);
+            end
+            $display("----------------------------------------------");
             $stop;
         end
     end

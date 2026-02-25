@@ -23,6 +23,10 @@ module top (
 wire fs_to_ds_valid;
 wire ds_allowin;
 wire [`FS_TO_DS_BUS_WD-1:0] if_id_bus;
+wire [5:0] exception_code_fd;
+wire [31:0] exception_mtval_fd;
+wire exception_flag;
+wire [31:0] exception_addr;
 // ID 阶段
 wire ds_to_es_valid;
 wire es_allowin;
@@ -33,6 +37,8 @@ wire [31:0] reg_data1;
 wire [31:0] reg_data2;
 wire [11:0] csr_raddr;
 wire [31:0] csr_rdata;
+wire [5:0] exception_code_de;
+wire [31:0] exception_mtval_de;
 // EXE 阶段
 wire es_to_ms_valid;
 wire ms_allowin;
@@ -40,8 +46,11 @@ wire [`ES_TO_MS_BUS_WD-1:0] exe_mem_bus;
 wire [31:0] exe_id_data;
 wire [4:0] exe_id_waddr;
 wire exe_id_we;
+wire exe_id_es_valid;
 wire [31:0] br_target;
 wire br_taken;
+wire [5:0] exception_code_em;
+wire [31:0] exception_mtval_em;
 // MEM 阶段
 wire ms_to_ws_valid;
 wire ws_allowin;
@@ -52,6 +61,8 @@ wire mem_id_we;
 wire csr_we;
 wire [11:0] csr_addr;
 wire [31:0] csr_wdata;
+wire [5:0] exception_code;
+wire [31:0] exception_mtval;
 // WB 阶段
 wire rf_we;
 wire [4:0] rf_waddr;
@@ -70,7 +81,13 @@ if_stage u_if_stage (
     .inst_ren(imem_ren),
     .ds_allowin(ds_allowin),
     .fs_to_ds_valid(fs_to_ds_valid),
-    .if_id_bus_out(if_id_bus)
+    .if_id_bus_out(if_id_bus),
+    .br_target(br_target),
+    .br_jmp_flag(br_taken),
+    .exception_code_fd(exception_code_fd),
+    .exception_mtval_fd(exception_mtval_fd),
+    .exception_flag(exception_flag),
+    .exception_addr(exception_addr)
 );
 
 id_stage u_id_stage (
@@ -97,7 +114,13 @@ id_stage u_id_stage (
     .exe_data_wen(exe_id_we),
     .exe_data_addr(exe_id_waddr),
     .exe_data(exe_id_data),
-    .br_jmp_flag(br_taken)
+    .exe_id_es_valid(exe_id_es_valid),
+    .br_jmp_flag(br_taken),
+    .exception_code_de(exception_code_de),
+    .exception_mtval_de(exception_mtval_de),
+    .exception_flag(exception_flag),
+    .exception_code_fd(exception_code_fd),
+    .exception_mtval_fd(exception_mtval_fd)
 );
 
 exe_stage u_exe_stage (
@@ -116,9 +139,14 @@ exe_stage u_exe_stage (
     .exe_id_data(exe_id_data),
     .exe_id_waddr(exe_id_waddr),
     .exe_id_we(exe_id_we),
-    .exception_nop(1'b0), // 暂时不处理异常
+    .exe_id_es_valid(exe_id_es_valid),
     .br_target(br_target),
-    .br_taken(br_taken)
+    .br_taken(br_taken),
+    .exception_code_de(exception_code_de),
+    .exception_mtval_de(exception_mtval_de),
+    .exception_code_em(exception_code_em),
+    .exception_mtval_em(exception_mtval_em),
+    .exception_flag(exception_flag)
 );
 
 mem_stage u_mem_stage (
@@ -136,7 +164,12 @@ mem_stage u_mem_stage (
     .csr_wdata(csr_wdata),
     .mem_id_data(mem_id_data),
     .mem_id_waddr(mem_id_waddr),
-    .mem_id_we(mem_id_we)
+    .mem_id_we(mem_id_we),
+    .exception_code_em(exception_code_em),
+    .exception_mtval_em(exception_mtval_em),
+    .exception_flag(exception_flag),
+    .exception_code(exception_code),
+    .exception_mtval(exception_mtval)
 );
 
 wb_stage u_wb_stage (
@@ -171,7 +204,11 @@ regfiles_csr u_regfiles_csr (
     .csr_waddr(csr_addr),
     .csr_wdata(csr_wdata),
     .csr_raddr(csr_raddr),
-    .csr_rdata(csr_rdata)
+    .csr_rdata(csr_rdata),
+    .exception_code(exception_code),
+    .exception_mtval(exception_mtval),
+    .exception_flag(exception_flag),
+    .exception_addr(exception_addr)
 );
 
 endmodule

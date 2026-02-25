@@ -1,4 +1,7 @@
-module inst_ram (
+module inst_ram #(
+    parameter MEM_HEX_PATH = "C:\\Users\\ZY\\Desktop\\riiscv-cpu-rnew\\hex\\riscv-tests\\rv32ui-p-lui.hex"
+)
+(
     input wire clk,
     input wire rst_n,
     //指令寄存器接口
@@ -11,7 +14,7 @@ module inst_ram (
 
 reg [31:0] mem [0:3000];
 initial begin
-    $readmemh("C:\\Users\\ZY\\Desktop\\riiscv-cpu-rnew\\hex\\inst_ram.hex", mem);
+    $readmemh(MEM_HEX_PATH, mem);
 end
 
 always @ (posedge clk) begin

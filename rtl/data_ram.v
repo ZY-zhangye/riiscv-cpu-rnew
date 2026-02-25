@@ -1,4 +1,7 @@
-module data_ram (
+module data_ram #(
+    parameter MEM_HEX_PATH = "C:\\Users\\ZY\\Desktop\\riiscv-cpu-rnew\\hex\\riscv-tests\\rv32ui-p-lui.hex"
+)
+ (
     input wire clk,
     input wire rst_n,
     //数据寄存器接口
@@ -11,7 +14,7 @@ module data_ram (
 
 reg [31:0] mem [0:3000];
 initial begin
-    $readmemh("C:\\Users\\ZY\\Desktop\\riiscv-cpu-rnew\\hex\\inst_ram.hex", mem);
+    $readmemh(MEM_HEX_PATH, mem);
 end
 always @ (posedge clk) begin
     if (|data_ram_wen) begin // 只要有一个写使能位被置位，就进行写操作
@@ -25,7 +28,7 @@ end
 
 always @ (posedge clk) begin
     if (data_ram_ren) begin
-        if ((|data_ram_wen) && (data_ram_addr[13:2] == data_ram_addr[13:2])) begin
+        if (|data_ram_wen) begin
             // 如果当前周期有写操作，并且地址匹配，则返回写入的数据（考虑写使能）
             data_ram_rdata <= {
                 data_ram_wen[3] ? data_ram_wdata[31:24] : mem[data_ram_addr[31:2]][31:24],
@@ -37,6 +40,8 @@ always @ (posedge clk) begin
             data_ram_rdata <= mem[data_ram_addr[31:2]]; // 按字对齐访问
         end
         $display("Data Read: Addr=%08h Data=%08h", data_ram_addr, mem[data_ram_addr[31:2]]);
+    end else begin
+        data_ram_rdata <= 32'b0; // 不读时输出0
     end
 end
 endmodule
