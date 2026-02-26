@@ -26,7 +26,10 @@ module mem_stage (
     input wire [31:0] exception_mtval_em,
     input wire exception_flag,
     output wire [5:0] exception_code,
-    output wire [31:0] exception_mtval
+    output wire [31:0] exception_mtval,
+    //中断相关信号
+    input wire timer_interrupt_flag,
+    output wire [4:0] interrupt_code
 );
 
 wire ms_ready_go = 1'b1; // MEM 阶段无内部停顿，始终准备好
@@ -111,6 +114,9 @@ assign mem_wb_bus_out = {
 // 输出异常相关信号
 assign exception_code = exception_code_em_r;
 assign exception_mtval = exception_mtval_em_r;
+
+//中断相关信号输出
+assign interrupt_code = {timer_interrupt_flag, 4'b0111}; // 定时器中断优先级最高，其他中断位暂时保留
 
 // 输出CSR相关信号
 assign csr_we = mem_csr_we && !exception_code_em_r[5:0]; // 发生异常时不写CSR

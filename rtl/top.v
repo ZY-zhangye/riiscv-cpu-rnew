@@ -66,6 +66,8 @@ wire [11:0] csr_addr;
 wire [31:0] csr_wdata;
 wire [5:0] exception_code;
 wire [31:0] exception_mtval;
+wire timer_interrupt_flag;
+wire [4:0] interrupt_code;
 // WB 阶段
 wire rf_we;
 wire [4:0] rf_waddr;
@@ -178,7 +180,9 @@ mem_stage u_mem_stage (
     .exception_mtval_em(exception_mtval_em),
     .exception_flag(exception_flag),
     .exception_code(exception_code),
-    .exception_mtval(exception_mtval)
+    .exception_mtval(exception_mtval),
+    .timer_interrupt_flag(timer_interrupt_flag),
+    .interrupt_code(interrupt_code)
 );
 
 wb_stage u_wb_stage (
@@ -217,7 +221,9 @@ regfiles_csr u_regfiles_csr (
     .exception_code(exception_code),
     .exception_mtval(exception_mtval),
     .exception_flag(exception_flag),
-    .exception_addr(exception_addr)
+    .exception_addr(exception_addr),
+    .timer_interrupt_flag(timer_interrupt_flag),
+    .interrupt_code(interrupt_code)
 );
 
 endmodule
