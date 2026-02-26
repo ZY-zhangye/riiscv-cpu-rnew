@@ -147,7 +147,7 @@ assign {ALU_ADD, ALU_ADDI, ALU_SUB, ALU_AND, ALU_OR, ALU_XOR,
 
 wire [63:0] mul_full,mul_full_hsu,mul_full_hu;
 assign mul_full = $signed(op1_data) * $signed(op2_data);
-assign mul_full_hsu = $signed(op1_data) * $unsigned(op2_data);
+assign mul_full_hsu = $signed(op1_data) * $signed({1'b0, op2_data});
 assign mul_full_hu = $unsigned(op1_data) * $unsigned(op2_data);
 wire [31:0] alu_add = op1_data + op2_data;
 wire [31:0] alu_addi = $signed(op1_data) + $signed(op2_data);

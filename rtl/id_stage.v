@@ -175,6 +175,10 @@ wire inst_srl = is_op_reg && f3_101 && f7_0000000;
 wire inst_sra = is_op_reg && f3_101 && f7_0100000;
 wire inst_or  = is_op_reg && f3_110 && f7_0000000;
 wire inst_and = is_op_reg && f3_111 && f7_0000000;
+wire inst_mul = is_op_reg && f3_000 && f7_0000001;
+wire inst_mulh = is_op_reg && f3_001 && f7_0000001;
+wire inst_mulhu = is_op_reg && f3_011 && f7_0000001;
+wire inst_mulhsu = is_op_reg && f3_010 && f7_0000001;
 
 //lui指令 (opcode=0110111)
 wire inst_lui = is_lui;
@@ -248,10 +252,10 @@ wire ALU_SLT = inst_slt || inst_slti;           //有符号比较小于
 wire ALU_SLTU = inst_sltu || inst_sltiu;          //无符号比较小于
 wire ALU_JALR = inst_jalr;          //JALR指令的ALU操作（计算跳转地址）
 wire ALU_COPY1 = is_system ? 1'b1 : 1'b0;         //仅将第一个操作数传递到EXE阶段（用于CSR指令，ALU不进行计算）
-wire ALU_MUL = 0;           //乘法指令标志（MUL/MULH/MULHU/MULHSU）
-wire ALU_MULH = 0;          
-wire ALU_MULHU = 0;
-wire ALU_MULHSU = 0;
+wire ALU_MUL = inst_mul;           //乘法指令标志（MUL/MULH/MULHU/MULHSU）
+wire ALU_MULH = inst_mulh;          
+wire ALU_MULHU = inst_mulhu;
+wire ALU_MULHSU = inst_mulhsu;
 wire [16:0] alu_op = {ALU_ADD, ALU_ADDI, ALU_SUB, ALU_AND, ALU_OR, ALU_XOR,
                    ALU_SLL, ALU_SRL, ALU_SRA, ALU_SLT, ALU_SLTU,
                    ALU_JALR, ALU_COPY1,
