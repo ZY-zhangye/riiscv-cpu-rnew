@@ -1,4 +1,4 @@
-`define MEM_HEX_PATH "C:\\Users\\ZY\\Desktop\\riiscv-cpu-rnew\\hex\\riscv-tests\\rv32um-p-mulhsu.hex"
+`define MEM_HEX_PATH "C:\\Users\\ZY\\Desktop\\riiscv-cpu-rnew\\hex\\riscv-tests\\rv32ui-p-lbu.hex"
 // 加载内存文件
 /*# 定义【标准整数运算指令集】数组 - RV32I 基础指令全集
 UI_INSTS=(sw lw add addi sub and andi or ori xor xori 

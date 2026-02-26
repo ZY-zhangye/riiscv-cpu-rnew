@@ -46,6 +46,7 @@ end
 reg [`ES_TO_MS_BUS_WD-1:0] exe_mem_bus_r;
 reg [5:0] exception_code_em_r;
 reg [31:0] exception_mtval_em_r;
+wire [4:0] mem_size; // 访存数据大小信号（从EXE阶段传来）
 wire [31:0] mem_pc;
 wire [31:0] alu_result;
 wire [4:0] rd_out;
@@ -55,6 +56,7 @@ wire mem_csr_we;
 wire [11:0] mem_csr_addr;
 wire [31:0] mem_csr_wdata;
 assign {
+    mem_size,
     mem_pc,         // [31:0] 当前指令地址
     alu_result,     // [31:0] ALU计算结果
     rd_out,         // [4:0] 目的寄存器地址
@@ -84,7 +86,13 @@ always @(posedge clk or negedge rst_n) begin
 end
 
 // 从数据存储器读取的结果
-wire [31:0] mem_result = data_sram_rdata;
+wire [1:0] data_offest = mem_size[4:3]; // 从mem_size中提取地址偏移信息
+wire [7:0] selected_byte = data_sram_rdata >> (data_offest * 8); // 根据地址偏移选择正确的字节
+wire [15:0] selected_half = data_sram_rdata >> (data_offest[1] * 16); // 根据地址偏移选择正确的半字
+wire [31:0] mem_rd_data = (mem_size[0] && mem_size[1]) ? (mem_size[2] ? {{24{selected_byte[7]}}, selected_byte} : {24'b0, selected_byte})
+                        : (mem_size[0] && !mem_size[1]) ? (mem_size[2] ? {{16{selected_half[15]}}, selected_half} : {16'b0, selected_half})
+                        : data_sram_rdata; // 32位访存直接使用原数据
+wire [31:0] mem_result = mem_rd_data; // 访存结果，后续可能需要根据mem_size进行符号扩展或零扩展
 
 // 最终写回的数据选择
 wire [31:0] ms_final_result = (wb_sel == 2'b00) ? alu_result : // ALU结果

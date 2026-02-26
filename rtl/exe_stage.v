@@ -207,9 +207,17 @@ assign br_target = exe_jmp_flag ? alu_jalr : alu_result;
 
 //访存信号
 assign data_sram_en = exe_mem_re;
-assign data_sram_wen = exe_mem_we && es_valid ? 4'hF : 4'h0; // 32位访存，写使能为1111
+assign data_sram_wen = (exe_mem_we && es_allowin) ? 
+                        ((exe_mem_size[0] && exe_mem_size[1]) ? (4'b0001 << alu_result[1:0]) : // 8位访存（字节次序反转）
+                        (exe_mem_size[0] && !exe_mem_size[1]) ? (alu_result[1] ? 4'b1100 : 4'b0011) : // 16位访存（低/高半字交换）
+                        (!exe_mem_size[0]) ? 4'b1111 : // 32位访存
+                        4'b0000) : 4'b0000; // 非写操作时，写使能全为0
 assign data_sram_addr = alu_result;
-assign data_sram_wdata = exe_rs2_data;
+assign data_sram_wdata = (exe_mem_size[0] && !exe_mem_size[1]) ? {exe_rs2_data[15:0],exe_rs2_data[15:0]} : // 16位访存，数据复制到高16位
+                        (exe_mem_size[0] && exe_mem_size[1]) ? {exe_rs2_data[7:0], exe_rs2_data[7:0], exe_rs2_data[7:0], exe_rs2_data[7:0]} : // 8位访存，数据复制到所有字节
+                        exe_rs2_data; // 32位访存
+wire [4:0] exe_to_mem_size;
+assign exe_to_mem_size = {alu_result[1:0], exe_mem_size};
 
 //数据前递
 assign exe_id_data = alu_result;
@@ -227,6 +235,7 @@ wire [31:0] exe_csr_wdata = (exe_csr_cmd == 4'b0001) ? op1_data : // CSRRW
 
 // 输出到访存阶段的总线打包
 assign exe_mem_bus_out = {
+    exe_to_mem_size, // [4:0] 送往访存阶段的访存大小和地址偏移信息
     exe_pc,         // [31:0] 当前指令地址
     alu_result,     // [31:0] ALU计算结果
     exe_rd_addr,    // [4:0] 目的寄存器地址

@@ -135,9 +135,15 @@ wire f7_0000100 = (funct7 == 7'b0000100);
 
 //load指令 (opcode=0000011)
 wire inst_lw = is_load && f3_010;
+wire inst_lb = is_load && f3_000;
+wire inst_lh = is_load && f3_001;
+wire inst_lbu = is_load && f3_100;
+wire inst_lhu = is_load && f3_101;
 
 //store指令 (opcode=0100011)
 wire inst_sw = is_store && f3_010;
+wire inst_sb = is_store && f3_000;
+wire inst_sh = is_store && f3_001;
 
 //branch指令 (opcode=1100011)
 wire inst_beq = is_branch && f3_000;
@@ -199,10 +205,10 @@ wire inst_csrrci = is_system && f3_111;
 wire inst_fence = is_fence;
 
 //立即数选择
-wire IMI_valid = inst_lw || inst_addi || inst_slti || inst_sltiu || inst_xori || inst_ori || inst_andi || inst_slli || inst_srli || inst_srai || inst_jalr;
-wire IMS_valid = inst_sw;
+wire IMI_valid = is_load || inst_addi || inst_slti || inst_sltiu || inst_xori || inst_ori || inst_andi || inst_slli || inst_srli || inst_srai || inst_jalr;
+wire IMS_valid = is_store;
 wire IMB_valid = inst_beq || inst_bne || inst_blt || inst_bge || inst_bltu || inst_bgeu; // 分支指令
-wire IMJ_valid = inst_jal; // 跳转指令
+wire IMJ_valid = is_jal; // 跳转指令
 wire IMZ_valid = inst_csrrwi || inst_csrrsi || inst_csrrci; // CSR立即数指令
 wire IMU_valid = inst_lui || inst_auipc; // 上半立即数指令
 wire [31:0] imm = IMI_valid ? imm_i_ext :
@@ -229,7 +235,7 @@ assign rs2_data = (reg_addr2 == 5'b0) ? 32'b0 :
 //控制信号生成
 wire [2:0] op1_sel; // 送往EXE的第一个操作数选择信号
 wire [1:0] op2_sel; // 送往EXE的第二个操作数选择信号
-wire op1_rs1 = (is_op_imm || is_load || is_store || inst_jalr || inst_csrrw || inst_csrrs || inst_csrrc || is_op_reg) ? 1'b1 : 1'b0;
+wire op1_rs1 = (is_op_imm || is_load || is_store || is_jalr || inst_csrrw || inst_csrrs || inst_csrrc || is_op_reg) ? 1'b1 : 1'b0;
 wire op1_pc = (is_auipc || is_jal || is_jalr || is_branch) ? 1'b1 : 1'b0;
 wire op1_imm = (is_lui || inst_csrrwi || inst_csrrsi || inst_csrrci) ? 1'b1 : 1'b0;
 assign op1_sel = {op1_rs1, op1_pc, op1_imm};
@@ -239,7 +245,7 @@ assign op2_sel = {op2_rs2, op2_imm};
 wire rd_wen = (is_op_reg || is_op_imm || is_load || is_lui || is_auipc || is_system || is_jal || is_jalr) ? 1'b1 : 1'b0;
 
 //ALU操作类型
-wire ALU_ADD = inst_lw || inst_sw || inst_add || inst_lui || inst_auipc || inst_jal || is_branch;          //加法
+wire ALU_ADD = is_load || is_store || inst_add || inst_lui || inst_auipc || is_jal || is_branch;          //加法
 wire ALU_ADDI = inst_addi;                  //加法（立即数）        
 wire ALU_SUB = inst_sub;           //减法
 wire ALU_AND = inst_and || inst_andi;           //按位与
@@ -250,7 +256,7 @@ wire ALU_SRL = inst_srl || inst_srli;           //逻辑右移
 wire ALU_SRA = inst_sra || inst_srai;           //算术右移
 wire ALU_SLT = inst_slt || inst_slti;           //有符号比较小于
 wire ALU_SLTU = inst_sltu || inst_sltiu;          //无符号比较小于
-wire ALU_JALR = inst_jalr;          //JALR指令的ALU操作（计算跳转地址）
+wire ALU_JALR = is_jalr;          //JALR指令的ALU操作（计算跳转地址）
 wire ALU_COPY1 = is_system ? 1'b1 : 1'b0;         //仅将第一个操作数传递到EXE阶段（用于CSR指令，ALU不进行计算）
 wire ALU_MUL = inst_mul;           //乘法指令标志（MUL/MULH/MULHU/MULHSU）
 wire ALU_MULH = inst_mulh;          
@@ -263,7 +269,7 @@ wire [16:0] alu_op = {ALU_ADD, ALU_ADDI, ALU_SUB, ALU_AND, ALU_OR, ALU_XOR,
 
 //跳转与分支指令标志
 wire [2:0] br_type; // 送往EXE的分支类型信号
-wire jmp_flag = inst_jal || inst_jalr; // 跳转指令标志
+wire jmp_flag = is_jal || is_jalr; // 跳转指令标志
 assign br_type = inst_beq ? 3'b001 :
                  inst_bne ? 3'b010 :
                  inst_blt ? 3'b011 :
@@ -294,7 +300,13 @@ assign csr_cmd = inst_csrrw ? 4'b0001 :
 wire mem_we = is_store ? 1'b1 : 1'b0;
 wire mem_re = is_load ? 1'b1 : 1'b0;
 wire [2:0] mem_size; // 送往EXE的访存数据大小信号
-assign mem_size = 0;
+// mem_size信号定义
+// 0: 非对齐访存（lb/lbu/lh/lhu/sb/sh为1，lw/sw为0）
+// 1: 1为8位，0为16位（lb/lbu/sb为1，lh/lhu/sh为0）
+// 2: 1为符号扩展，0为补0（lb/lh为1，lbu/lhu为0，写指令为0）
+assign mem_size [0] = inst_lb || inst_lbu || inst_lh || inst_lhu || inst_sb || inst_sh; // 非对齐访存
+assign mem_size [1] = inst_lb || inst_lbu || inst_sb; // 8位访存
+assign mem_size [2] = inst_lb || inst_lh; // 符号扩展
 
 //异常相关
 wire [31:0] exception_mtval; // 送往EXE的异常相关信息（如指令地址、异常类型等）
