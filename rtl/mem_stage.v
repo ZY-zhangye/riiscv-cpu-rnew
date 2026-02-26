@@ -102,7 +102,7 @@ wire [31:0] ms_final_result = (wb_sel == 2'b00) ? alu_result : // ALU结果
 
 // 输出到写回阶段的总线打包
 assign mem_wb_bus_out = {
-    (rd_wen && !exception_flag),         // 1-bit 寄存器写使能
+    (rd_wen && !exception_code_em_r[5:0]),         // 1-bit 寄存器写使能
     rd_out,         // [4:0] 目的寄存器地址
     ms_final_result, // [31:0] 最终写回数据
     mem_pc          // [31:0] 当前指令地址
@@ -113,7 +113,7 @@ assign exception_code = exception_code_em_r;
 assign exception_mtval = exception_mtval_em_r;
 
 // 输出CSR相关信号
-assign csr_we = mem_csr_we && !exception_flag; // 发生异常时不写CSR
+assign csr_we = mem_csr_we && !exception_code_em_r[5:0]; // 发生异常时不写CSR
 assign csr_addr = mem_csr_addr;
 assign csr_wdata = exception_code_em_r[5] ? mem_pc : mem_csr_wdata; // 出现异常，复用CSR写数据为当前指令地址，便于异常处理程序获取异常发生的指令地址
 

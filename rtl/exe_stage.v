@@ -21,6 +21,9 @@ module exe_stage (
     output wire [4:0] exe_id_waddr,
     output wire exe_id_we,
     output wire exe_id_es_valid,
+    output wire [31:0] exe_id_csr_wdata,
+    output wire exe_id_csr_we,
+    output wire [11:0] exe_id_csr_addr,
     //跳转指令与分支指令的目标地址与信号
     output wire [31:0] br_target,
     output wire br_taken,
@@ -232,6 +235,9 @@ wire [31:0] exe_csr_wdata = (exe_csr_cmd == 4'b0001) ? op1_data : // CSRRW
                             (exe_csr_cmd == 4'b0110) ? alu_or : // CSRRSI
                             (exe_csr_cmd == 4'b0111) ? alu_csrrc :
                         32'b0; // 其他情况写入0（如不涉及CSR操作的指令）
+assign exe_id_csr_wdata = exe_csr_wdata;
+assign exe_id_csr_we = exe_csr_we;
+assign exe_id_csr_addr = exe_csr_addr;
 
 // 输出到访存阶段的总线打包
 assign exe_mem_bus_out = {
@@ -247,7 +253,16 @@ assign exe_mem_bus_out = {
 };
 
 // 输出异常相关信号
-assign exception_code_em = exception_code_reg;
-assign exception_mtval_em = exception_mtval_reg;
+wire exception_iam = br_taken && (br_target[1:0] != 2'b00); // 判断分支跳转目标地址是否为非4字节对齐
+wire exception_lam = ((!exe_mem_size[0] && alu_result[1:0] != 2'b00 && exe_mem_re) ||
+                    (exe_mem_size[0] && !exe_mem_size[1] && alu_result[0] != 1'b0 && exe_mem_re)); // 32位访存时，地址必须为4字节对齐;16位访存时，地址必须为2字节对齐
+wire exception_sam = (exe_mem_we && !exe_mem_size[0] && alu_result[1:0] != 2'b00) || (exe_mem_we && exe_mem_size[0] && !exe_mem_size[1] && alu_result[0] != 1'b0); // 8位访存时，地址必须为4字节对齐;16位访存时，地址必须为2字节对齐
+assign exception_code_em = exception_iam ? 6'b100000 :
+                           exception_lam ? 6'b100100 :
+                           exception_sam ? 6'b100110 :
+                           exception_code_reg; 
+assign exception_mtval_em = exception_iam ? br_target : 
+                            (exception_lam || exception_sam) ? alu_result :
+                            exception_mtval_reg;
 
 endmodule

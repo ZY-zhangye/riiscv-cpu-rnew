@@ -59,8 +59,9 @@ module if_stage (
     assign if_id_bus_out = {fs_inst, fs_pc};
 
     //异常相关输出
-    assign exception_code_fd = 6'b000000; // 暂时未定义具体异常类型，后续根据需要进行扩展
-    assign exception_mtval_fd = 32'b0; // 暂时未定义具体异常信息，后续根据需要进行扩展
+    wire exception_iam = pc_out[1:0] != 2'b00 && fs_allowin; // 判断是否为非4字节对齐的地址
+    assign exception_code_fd = exception_iam ? 6'b100000 : 6'b000000; // 未对齐地址异常代码为4，其他异常代码为0
+    assign exception_mtval_fd = pc_out; // 异常mtval字段为异常地址
 
 endmodule
 

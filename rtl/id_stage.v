@@ -32,6 +32,9 @@ module id_stage (
     input wire [4:0] exe_data_addr,
     input wire [31:0] exe_data,
     input wire exe_id_es_valid,
+    input wire [31:0] exe_id_csr_wdata,
+    input wire exe_id_csr_we,
+    input wire [11:0] exe_id_csr_addr,
     //跳转控制信号
     input wire br_jmp_flag,
     //异常相关信号
@@ -193,7 +196,9 @@ wire inst_lui = is_lui;
 wire inst_auipc = is_auipc;
 
 //system指令 (opcode=1110011)
-wire inst_ecall = is_system && f3_000 && f7_0000000;
+wire inst_ecall = is_system && f3_000 && id_inst[25:20] == 6'b000000;
+wire inst_ebreak = is_system && f3_000 && id_inst[25:20] == 6'b000001;
+wire inst_mret = is_system && f3_000 && f7_0011000;
 wire inst_csrrw = is_system && f3_001;
 wire inst_csrrs = is_system && f3_010;
 wire inst_csrrc = is_system && f3_011;
@@ -288,7 +293,7 @@ wire [4:0] rd_out = rd_addr;
 wire [3:0] csr_cmd; // 送往EXE的CSR操作类型信号
 wire csr_we = is_system ? 1'b1 : 1'b0;
 wire [11:0] csr_waddr = csr_raddr; 
-wire [31:0] csr_rdata_out = csr_rdata; // 直接将CSR寄存器的读出数据送往EXE阶段
+wire [31:0] csr_rdata_out = (exe_id_es_valid && exe_id_csr_we && exe_id_csr_addr == csr_raddr) ? exe_id_csr_wdata : csr_rdata; // 如果EXE阶段正在写同一个CSR寄存器，则前递该数据，否则使用CSR寄存器读出的数据
 assign csr_cmd = inst_csrrw ? 4'b0001 :
                  inst_csrrs ? 4'b0010 :
                  inst_csrrc ? 4'b0011 :
@@ -354,7 +359,10 @@ always @ (*) begin
 end
 
 //异常相关输出
-assign exception_code_de = (inst_ecall && ds_allowin) ? 6'b101011 : exception_code_reg; 
+assign exception_code_de = (inst_ecall && ds_allowin) ? 6'b101011 
+                            : (inst_ebreak && ds_allowin) ? 6'b100011
+                            : (inst_mret && ds_allowin) ? 6'b011111
+                            : exception_code_reg; 
 assign exception_mtval_de = exception_mtval_reg;
 
 endmodule

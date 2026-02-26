@@ -47,6 +47,9 @@ wire [31:0] exe_id_data;
 wire [4:0] exe_id_waddr;
 wire exe_id_we;
 wire exe_id_es_valid;
+wire [31:0] exe_id_csr_wdata;
+wire exe_id_csr_we;
+wire [11:0] exe_id_csr_addr;
 wire [31:0] br_target;
 wire br_taken;
 wire [5:0] exception_code_em;
@@ -115,6 +118,9 @@ id_stage u_id_stage (
     .exe_data_addr(exe_id_waddr),
     .exe_data(exe_id_data),
     .exe_id_es_valid(exe_id_es_valid),
+    .exe_id_csr_wdata(exe_id_csr_wdata),
+    .exe_id_csr_we(exe_id_csr_we),
+    .exe_id_csr_addr(exe_id_csr_addr),
     .br_jmp_flag(br_taken),
     .exception_code_de(exception_code_de),
     .exception_mtval_de(exception_mtval_de),
@@ -140,6 +146,9 @@ exe_stage u_exe_stage (
     .exe_id_waddr(exe_id_waddr),
     .exe_id_we(exe_id_we),
     .exe_id_es_valid(exe_id_es_valid),
+    .exe_id_csr_wdata(exe_id_csr_wdata),
+    .exe_id_csr_we(exe_id_csr_we),
+    .exe_id_csr_addr(exe_id_csr_addr),
     .br_target(br_target),
     .br_taken(br_taken),
     .exception_code_de(exception_code_de),

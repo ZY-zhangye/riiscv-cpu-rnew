@@ -28,6 +28,7 @@ reg [31:0] mvendorid;
 reg [31:0] marchid;
 reg [31:0] mimpid;
 reg [31:0] mscratch;
+wire mret_flag = & exception_code[4:0]; // mret指令的异常代码
 
 //CSR寄存器写操作
 always @(posedge clk or negedge rst_n) begin
@@ -64,10 +65,11 @@ always @(posedge clk or negedge rst_n) begin
         endcase
     end else begin
         if (exception_code[5]) begin
+            $display("CSR: Exception occurred! Code: %b, mtval: %h", exception_code, exception_mtval);
             mepc <= csr_wdata; // 将引起异常的指令地址写入mepc
             mcause <= {27'b0, exception_code[4:0]}; // 将异常代码写入mcause
             mtval <= exception_mtval; // 将引起异常的地址或数据写入mtval
-        end else if (& exception_code[4:0]) begin
+        end else if (mret_flag) begin
             //mret指令，清除异常状态
             mstatus [3] <= mstatus[7]; // 恢复mstatus中MIE位的值
             mstatus [7] <= 1'b1; 
@@ -96,8 +98,21 @@ always @(*) begin
     endcase
 end
 
+//异常标志以及mret指令恢复相关
+reg prev_exception_flag;
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        prev_exception_flag <= 1'b0;
+    end else if (exception_code[5]) begin
+        prev_exception_flag <= 1'b1; // 记录异常发生
+    end else if (mret_flag) begin
+        prev_exception_flag <= 1'b0; // mret指令，清除异常标志
+    end
+end
+wire mret_jmp_flag = mret_flag && prev_exception_flag; // 只有在之前发生过异常的情况下，mret指令才会跳转
+
 assign csr_rdata = csr_rdata_reg;
-assign exception_flag = exception_code[5];
-assign exception_addr = mtvec;
+assign exception_flag = exception_code[5] || mret_jmp_flag; // 发生异常或执行mret指令时，exception_flag为1
+assign exception_addr = mret_jmp_flag ? mepc : mtvec; // mret指令跳转到mepc，其他异常跳转到mtvec
 
 endmodule
