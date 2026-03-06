@@ -32,9 +32,7 @@ module exe_stage (
     input wire [31:0] exception_mtval_de,
     output wire [5:0] exception_code_em,
     output wire [31:0] exception_mtval_em,
-    input wire exception_flag,
-    //单独乘法器可能造成的数据冒险前递接口
-    input wire [31:0] mult_result
+    input wire exception_flag
 );
 
 wire es_ready_go = 1'b1; // EXE 阶段无内部停顿，始终准备好
@@ -77,14 +75,14 @@ wire [31:0] exe_pc;
 wire [31:0] exe_imm;
 wire [31:0] exe_rs1_data;
 wire [31:0] exe_rs2_data;
-wire [3:0] exe_op1_sel;
-wire [2:0] exe_op2_sel;
+wire [2:0] exe_op1_sel;
+wire [1:0] exe_op2_sel;
 wire [16:0] exe_alu_op;
 wire [2:0] exe_br_type;
 wire exe_jmp_flag;
 wire exe_rd_wen;
 wire [4:0] exe_rd_addr;
-wire [2:0] exe_wb_sel;
+wire [1:0] exe_wb_sel;
 wire [3:0] exe_csr_cmd;
 wire exe_csr_we;
 wire [11:0] exe_csr_addr;
@@ -119,12 +117,10 @@ assign {
 // ALU操作数选择
 wire [31:0] op1_data;
 wire [31:0] op2_data;
-assign op1_data = exe_op1_sel[3] ? mult_result : // 来自单独乘法器的结果前递
-                  exe_op1_sel[2] ? exe_rs1_data :
+assign op1_data = exe_op1_sel[2] ? exe_rs1_data :
                   exe_op1_sel[1] ? exe_pc :
                   exe_op1_sel[0] ? exe_imm : 32'b0;
 assign op2_data = |exe_csr_cmd ? csr_rdata :
-                    exe_op2_sel[2] ? mult_result : // 来自单独乘法器的结果前递
                     exe_op2_sel[1] ? exe_rs2_data :
                     exe_op2_sel[0] ? exe_imm : 32'b0;
 
@@ -194,10 +190,10 @@ always @(*) begin
         ALU_SLTU:  alu_result = alu_sltu;
         ALU_JALR:  alu_result = alu_jalr;
         ALU_COPY1: alu_result = alu_copy1;
-        /*ALU_MUL:   alu_result = alu_mul;
+        ALU_MUL:   alu_result = alu_mul;
         ALU_MULH:  alu_result = alu_mulh;
         ALU_MULHU: alu_result = alu_mulhu;
-        ALU_MULHSU:alu_result = alu_mulhsu;*/
+        ALU_MULHSU:alu_result = alu_mulhsu;
         default:   alu_result = 32'b0;
     endcase
 end
@@ -250,7 +246,7 @@ assign exe_mem_bus_out = {
     alu_result,     // [31:0] ALU计算结果
     exe_rd_addr,    // [4:0] 目的寄存器地址
     exe_rd_wen,     // 1-bit 目的寄存器写使能
-    exe_wb_sel,     // [2:0] 写回数据选择信号
+    exe_wb_sel,     // [1:0] 写回数据选择信号
     exe_csr_we,     // 1-bit CSR写使能
     exe_csr_addr,   // [11:0] CSR地址
     exe_csr_wdata   // [31:0] CSR写数据

@@ -42,11 +42,7 @@ module id_stage (
     input wire [31:0] exception_mtval_fd,
     input wire exception_flag,
     output wire [5:0] exception_code_de,
-    output wire [31:0] exception_mtval_de,
-    //单独的乘法模块接口（优化时序；结果输出值mem阶段，不阻挡后续指令）
-    output wire [31:0] a,
-    output wire [31:0] b,
-    output wire [3:0] op
+    output wire [31:0] exception_mtval_de
 );
 
 localparam nop = 32'h00000013; // addi x0, x0, 0
@@ -242,17 +238,15 @@ assign rs2_data = (reg_addr2 == 5'b0) ? 32'b0 :
                     reg_data2;
 
 //控制信号生成
-wire [3:0] op1_sel; // 送往EXE的第一个操作数选择信号
-wire [2:0] op2_sel; // 送往EXE的第二个操作数选择信号
+wire [2:0] op1_sel; // 送往EXE的第一个操作数选择信号
+wire [1:0] op2_sel; // 送往EXE的第二个操作数选择信号
 wire op1_rs1 = (is_op_imm || is_load || is_store || is_jalr || inst_csrrw || inst_csrrs || inst_csrrc || is_op_reg) ? 1'b1 : 1'b0;
 wire op1_pc = (is_auipc || is_jal || is_jalr || is_branch) ? 1'b1 : 1'b0;
 wire op1_imm = (is_lui || inst_csrrwi || inst_csrrsi || inst_csrrci) ? 1'b1 : 1'b0;
-wire op1_mult; //多周期乘法指令一旦出现，并且出现写后读数据冒险时，需要将mem阶段才可以产生的乘法指令的结果前递至exe阶段以解除数据冒险的同时不会停顿流水线
-assign op1_sel = {op1_mult, op1_rs1, op1_pc, op1_imm};
+assign op1_sel = {op1_rs1, op1_pc, op1_imm};
 wire op2_rs2 = (is_op_reg) ? 1'b1 : 1'b0;
 wire op2_imm = (is_op_imm || is_load || is_store || is_jal || is_jalr || is_branch || is_auipc) ? 1'b1 : 1'b0;
-wire op2_mult; //同上具体产生条件见下
-assign op2_sel = {op2_mult, op2_rs2, op2_imm};
+assign op2_sel = {op2_rs2, op2_imm};
 wire rd_wen = (is_op_reg || is_op_imm || is_load || is_lui || is_auipc || is_system || is_jal || is_jalr) ? 1'b1 : 1'b0;
 
 //ALU操作类型
@@ -289,11 +283,10 @@ assign br_type = inst_beq ? 3'b001 :
                  inst_bgeu ? 3'b110 : 3'b000;
 
 //写回寄存器相关
-wire [2:0] wb_sel; 
-wire wb_sel_mul = (inst_mul || inst_mulh || inst_mulhu || inst_mulhsu) ? 1'b1 : 1'b0; // 来自单独乘法器的结果
+wire [1:0] wb_sel; 
 wire wb_sel_mem = is_load ? 1'b1 : 1'b0;
 wire wb_sel_pc = (is_jal || is_jalr) ? 1'b1 : 1'b0;
-assign wb_sel = {wb_sel_mul, wb_sel_pc, wb_sel_mem};
+assign wb_sel = {wb_sel_pc, wb_sel_mem};
 wire [4:0] rd_out = rd_addr;
 
 //CSR指令相关
@@ -371,22 +364,5 @@ assign exception_code_de = (inst_ecall && ds_allowin) ? 6'b101011
                             : (inst_mret && ds_allowin) ? 6'b011111
                             : exception_code_reg; 
 assign exception_mtval_de = exception_mtval_reg;
-
-//单独的乘法模块接口
-assign a = rs1_data;
-assign b = rs2_data;
-assign op = {ALU_MUL, ALU_MULH, ALU_MULHU, ALU_MULHSU};
-
-//处理单独乘法器可能造成的数据冒险
-reg prev_mul; // 上一条指令是否为乘法指令
-always @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-        prev_mul <= 1'b0;
-    end else if (ds_allowin) begin
-        prev_mul <= inst_mul || inst_mulh || inst_mulhu || inst_mulhsu;
-    end
-end
-assign op1_mult = prev_mul && (reg_addr1 != 0) && (reg_addr1 == exe_data_addr) && exe_id_es_valid && op1_rs1; // 如果当前指令的rs1与上一条乘法指令的目的寄存器相同，并且上一条指令正在EXE阶段有效，则需要将乘法结果前递到EXE阶段作为第一个操作数
-assign op2_mult = prev_mul && (reg_addr2 != 0) && (reg_addr2 == exe_data_addr) && exe_id_es_valid && op2_rs2; // 如果当前指令的rs2与上一条乘法指令的目的寄存器相同，并且上一条指令正在EXE阶段有效，则需要将乘法结果前递到EXE阶段作为第二个操作数
 
 endmodule

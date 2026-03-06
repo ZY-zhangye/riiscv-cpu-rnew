@@ -72,11 +72,6 @@ wire [4:0] interrupt_code;
 wire rf_we;
 wire [4:0] rf_waddr;
 wire [31:0] rf_wdata;
-//单独乘法器模块接口
-wire [31:0] mul_result;
-wire [31:0] a;
-wire [31:0] b;
-wire [3:0] op;
 
 //debug接口
 assign debug_wb_rf_wen = rf_we;
@@ -133,10 +128,7 @@ id_stage u_id_stage (
     .exception_mtval_de(exception_mtval_de),
     .exception_flag(exception_flag),
     .exception_code_fd(exception_code_fd),
-    .exception_mtval_fd(exception_mtval_fd),
-    .a(a), // 从寄存器文件读取的第一个操作数
-    .b(b), // 从寄存器文件读取的第二个操作数
-    .op(op) // 传递操作码到乘法器模块
+    .exception_mtval_fd(exception_mtval_fd)
 );
 
 exe_stage u_exe_stage (
@@ -165,8 +157,7 @@ exe_stage u_exe_stage (
     .exception_mtval_de(exception_mtval_de),
     .exception_code_em(exception_code_em),
     .exception_mtval_em(exception_mtval_em),
-    .exception_flag(exception_flag),
-    .mult_result(mul_result) // 从单独乘法器模块接收计算结果
+    .exception_flag(exception_flag)
 );
 
 mem_stage u_mem_stage (
@@ -191,8 +182,7 @@ mem_stage u_mem_stage (
     .exception_code(exception_code),
     .exception_mtval(exception_mtval),
     .timer_interrupt_flag(timer_interrupt_flag),
-    .interrupt_code(interrupt_code),
-    .mul_result(mul_result) // 从单独乘法器模块接收计算结果
+    .interrupt_code(interrupt_code)
 );
 
 wb_stage u_wb_stage (
@@ -234,15 +224,6 @@ regfiles_csr u_regfiles_csr (
     .exception_addr(exception_addr),
     .timer_interrupt_flag(timer_interrupt_flag),
     .interrupt_code(interrupt_code)
-);
-
-mult u_mult (
-    .clk(clk),
-    .rst_n(rst_n),
-    .a(a), // 从寄存器文件读取的第一个操作数
-    .b(b), // 从寄存器文件读取的第二个操作数
-    .op(op), // 从ID阶段传来的操作码，区分乘法类型
-    .result(mul_result) // 计算结果输出到EXE阶段
 );
 
 endmodule
