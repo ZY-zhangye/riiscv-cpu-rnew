@@ -79,7 +79,7 @@ wire [31:0] exe_rs1_data;
 wire [31:0] exe_rs2_data;
 wire [3:0] exe_op1_sel;
 wire [2:0] exe_op2_sel;
-wire [16:0] exe_alu_op;
+wire [12:0] exe_alu_op;
 wire [2:0] exe_br_type;
 wire exe_jmp_flag;
 wire exe_rd_wen;
@@ -92,7 +92,6 @@ wire [31:0] csr_rdata;
 wire exe_mem_we;
 wire exe_mem_re;
 wire [2:0] exe_mem_size;
-wire [31:0] exe_exception_mtval;
 assign {
     exe_pc,
     exe_imm,
@@ -112,8 +111,7 @@ assign {
     csr_rdata,
     exe_mem_we,
     exe_mem_re,
-    exe_mem_size,
-    exe_exception_mtval
+    exe_mem_size
 } = ds_to_es_bus_r;
 
 // ALU操作数选择
@@ -142,20 +140,11 @@ wire ALU_SLT;           //有符号比较小于
 wire ALU_SLTU;          //无符号比较小于
 wire ALU_JALR;          //JALR指令的ALU操作（计算跳转地址）
 wire ALU_COPY1;         //仅将第一个操作数传递到EXE阶段（用于CSR指令，ALU不进行计算）
-wire ALU_MUL;           //乘法指令标志（MUL/MULH/MULHU/MULHSU）
-wire ALU_MULH;          
-wire ALU_MULHU;
-wire ALU_MULHSU;
 assign {ALU_ADD, ALU_ADDI, ALU_SUB, ALU_AND, ALU_OR, ALU_XOR,
         ALU_SLL, ALU_SRL, ALU_SRA, ALU_SLT, ALU_SLTU,
-        ALU_JALR, ALU_COPY1,
-        ALU_MUL, ALU_MULH, ALU_MULHU, ALU_MULHSU} = exe_alu_op;
+        ALU_JALR, ALU_COPY1} = exe_alu_op;
 
 
-wire [63:0] mul_full,mul_full_hsu,mul_full_hu;
-assign mul_full = $signed(op1_data) * $signed(op2_data);
-assign mul_full_hsu = $signed(op1_data) * $signed({1'b0, op2_data});
-assign mul_full_hu = $unsigned(op1_data) * $unsigned(op2_data);
 wire [31:0] alu_add = op1_data + op2_data;
 wire [31:0] alu_addi = $signed(op1_data) + $signed(op2_data);
 wire [31:0] alu_sub = op1_data - op2_data;
@@ -172,10 +161,6 @@ wire [31:0] alu_copy1 = csr_rdata;
 wire alu_beq = (exe_rs1_data == exe_rs2_data) ? 1'b1 : 1'b0;
 wire alu_blt = ($signed(exe_rs1_data) < $signed(exe_rs2_data)) ? 1'b1 : 1'b0;
 wire alu_bltu = (exe_rs1_data < exe_rs2_data) ? 1'b1 : 1'b0;
-wire [31:0] alu_mul = mul_full[31:0];
-wire [31:0] alu_mulh = mul_full[63:32];
-wire [31:0] alu_mulhu = mul_full_hu[63:32];
-wire [31:0] alu_mulhsu = mul_full_hsu[63:32];
 wire [31:0] alu_csrrc = op2_data & ~op1_data; 
 
 reg [31:0] alu_result;
@@ -194,10 +179,6 @@ always @(*) begin
         ALU_SLTU:  alu_result = alu_sltu;
         ALU_JALR:  alu_result = alu_jalr;
         ALU_COPY1: alu_result = alu_copy1;
-        /*ALU_MUL:   alu_result = alu_mul;
-        ALU_MULH:  alu_result = alu_mulh;
-        ALU_MULHU: alu_result = alu_mulhu;
-        ALU_MULHSU:alu_result = alu_mulhsu;*/
         default:   alu_result = 32'b0;
     endcase
 end

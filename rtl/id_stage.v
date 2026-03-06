@@ -138,7 +138,6 @@ wire f7_0000000 = (funct7 == 7'b0000000);
 wire f7_0100000 = (funct7 == 7'b0100000);
 wire f7_0000001 = (funct7 == 7'b0000001);
 wire f7_0011000 = (funct7 == 7'b0011000);
-wire f7_0000100 = (funct7 == 7'b0000100);
 
 //load指令 (opcode=0000011)
 wire inst_lw = is_load && f3_010;
@@ -269,14 +268,9 @@ wire ALU_SLT = inst_slt || inst_slti;           //有符号比较小于
 wire ALU_SLTU = inst_sltu || inst_sltiu;          //无符号比较小于
 wire ALU_JALR = is_jalr;          //JALR指令的ALU操作（计算跳转地址）
 wire ALU_COPY1 = is_system ? 1'b1 : 1'b0;         //仅将第一个操作数传递到EXE阶段（用于CSR指令，ALU不进行计算）
-wire ALU_MUL = inst_mul;           //乘法指令标志（MUL/MULH/MULHU/MULHSU）
-wire ALU_MULH = inst_mulh;          
-wire ALU_MULHU = inst_mulhu;
-wire ALU_MULHSU = inst_mulhsu;
-wire [16:0] alu_op = {ALU_ADD, ALU_ADDI, ALU_SUB, ALU_AND, ALU_OR, ALU_XOR,
+wire [12:0] alu_op = {ALU_ADD, ALU_ADDI, ALU_SUB, ALU_AND, ALU_OR, ALU_XOR,
                    ALU_SLL, ALU_SRL, ALU_SRA, ALU_SLT, ALU_SLTU,
-                   ALU_JALR, ALU_COPY1,
-                   ALU_MUL, ALU_MULH, ALU_MULHU, ALU_MULHSU};
+                   ALU_JALR, ALU_COPY1};
 
 //跳转与分支指令标志
 wire [2:0] br_type; // 送往EXE的分支类型信号
@@ -320,10 +314,6 @@ assign mem_size [0] = inst_lb || inst_lbu || inst_lh || inst_lhu || inst_sb || i
 assign mem_size [1] = inst_lb || inst_lbu || inst_sb; // 8位访存
 assign mem_size [2] = inst_lb || inst_lh; // 符号扩展
 
-//异常相关
-wire [31:0] exception_mtval; // 送往EXE的异常相关信息（如指令地址、异常类型等）
-assign exception_mtval = 0;
-
 //总线打包
 assign id_exe_bus_out = {
     id_pc,         // [31:0] 指令地址
@@ -331,7 +321,7 @@ assign id_exe_bus_out = {
     rs1_data,   // [31:0] rs1_data
     rs2_data,   // [31:0] rs2_data
     {op1_sel, op2_sel}, // [4:0] 操作数选择信号
-    alu_op,     // [16:0] ALU操作类型信号
+    alu_op,     // [12:0] ALU操作类型信号
     {br_type, jmp_flag}, //[3:0] 分支类型和跳转标志
     rd_wen,         // 送往EXE的寄存器写使能
     rd_out,         //[4:0] 目的寄存器地址
@@ -342,8 +332,7 @@ assign id_exe_bus_out = {
     csr_rdata_out,  //[31:0] 直接送往EXE阶段的CSR寄存器读出数据
     mem_we,     //store写使能
     mem_re,     //load读使能
-    mem_size,   //[2:0] 非对齐访存的字节数
-    exception_mtval //[31:0] // 送往EXE的异常相关信息
+    mem_size   //[2:0] 非对齐访存的字节数
 };
 
 //加载相关数据冒险检测
@@ -375,7 +364,7 @@ assign exception_mtval_de = exception_mtval_reg;
 //单独的乘法模块接口
 assign a = rs1_data;
 assign b = rs2_data;
-assign op = {ALU_MUL, ALU_MULH, ALU_MULHU, ALU_MULHSU};
+assign op = {inst_mul, inst_mulh, inst_mulhu, inst_mulhsu};
 
 //处理单独乘法器可能造成的数据冒险
 reg prev_mul; // 上一条指令是否为乘法指令
