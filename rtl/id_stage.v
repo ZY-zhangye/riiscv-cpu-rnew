@@ -53,7 +53,7 @@ localparam nop = 32'h00000013; // addi x0, x0, 0
 //握手协议
 reg stall_on_cycle; // 用于指令译码阶段的停顿信号；仅在出现加载相关数据冒险时使用
 reg ds_valid;
-wire ds_ready_go = !stall_on_cycle; // 当没有数据冒险时，DS阶段始终准备好接受新指令
+wire ds_ready_go = 1'b1; // 当没有数据冒险时，DS阶段始终准备好接受新指令
 assign ds_allowin = !ds_valid || ds_ready_go && es_allowin;
 assign ds_to_es_valid = ds_valid && ds_ready_go;
 always @(posedge clk or negedge rst_n) begin
@@ -253,6 +253,7 @@ wire op2_imm = (is_op_imm || is_load || is_store || is_jal || is_jalr || is_bran
 wire op2_mult; //同上具体产生条件见下
 assign op2_sel = {op2_mult, op2_rs2, op2_imm};
 wire rd_wen = (is_op_reg || is_op_imm || is_load || is_lui || is_auipc || is_system || is_jal || is_jalr) ? 1'b1 : 1'b0;
+reg [1:0] lw_rs_dependency; // 00无依赖，01依赖rs1，10依赖rs2
 
 //ALU操作类型
 wire ALU_ADD = is_load || is_store || inst_add || inst_lui || inst_auipc || is_jal || is_branch;          //加法
@@ -327,6 +328,7 @@ assign id_exe_bus_out = {
     rd_out,         //[4:0] 目的寄存器地址
     wb_sel,         //[1:0] 送往EXE的写回数据选择信号
     csr_cmd,        //[3:0] 送往EXE的CSR操作类型信号
+    lw_rs_dependency, //[1:0] 送往EXE的加载相关数据冒险检测结果
     csr_we,         // 送往EXE的CSR写使能
     csr_waddr,      //[11:0] 送往EXE的CSR写地址
     csr_rdata_out,  //[31:0] 直接送往EXE阶段的CSR寄存器读出数据
@@ -336,6 +338,9 @@ assign id_exe_bus_out = {
 };
 
 //加载相关数据冒险检测
+//处理添加AXI4*-Lite后可能出现的数据冒险
+//主要为lw指令后续指令需要lw指令的数据，但是数据的返回需要多个周期，因此需要取消原来的检测到数据冒险便阻塞流水线，因为现在不是哟个时钟周期就可以解决的
+//现在改为设置一个有效信号，当lw指令进入EXE阶段时，如果后续指令需要这个数据，则可以通过这个有效信号知道数据还没有准备好，从而在EXE阶段进行相应的处理（例如暂停EXE阶段的计算，直到数据准备好）
 reg prev_load; // 上一条指令是否为load
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -346,11 +351,13 @@ always @(posedge clk or negedge rst_n) begin
 end
 always @ (*) begin
     if (!rst_n) begin
-        stall_on_cycle = 1'b0;
-    end else if (prev_load && ((reg_addr1 != 0 && reg_addr1 == exe_data_addr) || (reg_addr2 != 0 && reg_addr2 == exe_data_addr)) && exe_id_es_valid) begin
-        stall_on_cycle = 1'b1; // 如果当前指令的rs1或rs2与上一条load指令的目的寄存器相同，则需要停顿
+        lw_rs_dependency = 2'b00;
+    end else if (prev_load && ((reg_addr1 != 0 && reg_addr1 == exe_data_addr) ) && exe_id_es_valid) begin
+        lw_rs_dependency = 2'b01; // 当前指令的rs1依赖上一条load指令
+    end else if (prev_load && ((reg_addr2 != 0 && reg_addr2 == exe_data_addr) ) && exe_id_es_valid) begin
+        lw_rs_dependency = 2'b10; // 当前指令的rs2依赖上一条load指令
     end else begin
-        stall_on_cycle = 1'b0;
+        lw_rs_dependency = 2'b00;
     end
 end
 
@@ -377,5 +384,6 @@ always @(posedge clk or negedge rst_n) begin
 end
 assign op1_mult = prev_mul && (reg_addr1 != 0) && (reg_addr1 == exe_data_addr) && exe_id_es_valid && op1_rs1; // 如果当前指令的rs1与上一条乘法指令的目的寄存器相同，并且上一条指令正在EXE阶段有效，则需要将乘法结果前递到EXE阶段作为第一个操作数
 assign op2_mult = prev_mul && (reg_addr2 != 0) && (reg_addr2 == exe_data_addr) && exe_id_es_valid && op2_rs2; // 如果当前指令的rs2与上一条乘法指令的目的寄存器相同，并且上一条指令正在EXE阶段有效，则需要将乘法结果前递到EXE阶段作为第二个操作数
+
 
 endmodule

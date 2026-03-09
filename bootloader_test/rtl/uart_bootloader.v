@@ -19,6 +19,8 @@ wire [7:0] type_out;
 wire [15:0] addr_out;
 wire [31:0] data_out_frame;
 wire frame_valid;
+wire res;
+assign reset = res;
 
 uart uart_inst (
     .clk(clk),
@@ -64,7 +66,7 @@ bootloader bootloader_inst (
     .frame_valid(frame_valid),
     .dmem_write_bus(dmem_write_bus),
     .imem_write_bus(imem_write_bus),
-    .reset(reset),
+    .reset(res),
     .mem_valid(mem_valid)
 );
 

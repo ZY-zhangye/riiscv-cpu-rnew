@@ -14,7 +14,7 @@ module inst_ram #(
 
 reg [31:0] mem [0:3000];
 initial begin
-    $readmemh(MEM_HEX_PATH, mem);
+    //$readmemh(MEM_HEX_PATH, mem);
 end
 
 always @ (posedge clk) begin

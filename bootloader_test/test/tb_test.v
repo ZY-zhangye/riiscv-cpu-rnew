@@ -202,11 +202,11 @@ module tb_test;
         #100000;
         // 3. 启动运行
         uart_send_start(16'h0000, 32'h00000000);
-        #100000;
+        //#100000;
         // 4. 停止运行并重新进入bootloader
         //uart_send_stop(16'h0000, 32'h00000000);
         //#100000;
-        $stop; // 停止仿真
+        //$stop; // 停止仿真
     end
 
     // 监控输出，实时打印data_out和data_valid
@@ -242,6 +242,10 @@ module tb_test;
         if (boot_loader_flag) begin //仅在bootloader完成后监控CPU运行状态
             $display($time, " debug_inst_pc=%h, debug_wb_pc=%h, debug_wb_rf_wen=%b, debug_wb_rf_wnum=%h, debug_wb_rf_wdata=%h, debug_data=%h",
                 debug_inst_pc, debug_wb_pc, debug_wb_rf_wen, debug_wb_rf_wnum, debug_wb_rf_wdata, debug_data);
+            if (debug_wb_pc == 32'h00000044) begin
+                $display("Reached target instruction at PC=0x00000044, stopping simulation.");
+                $stop;
+            end
         end
     end
 

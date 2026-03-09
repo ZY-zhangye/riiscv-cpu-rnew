@@ -34,7 +34,9 @@ module exe_stage (
     output wire [31:0] exception_mtval_em,
     input wire exception_flag,
     //单独乘法器可能造成的数据冒险前递接口
-    input wire [31:0] mult_result
+    input wire [31:0] mult_result,
+    //AXI4-Lite接口可能造成的数据冒险前递接口
+    input wire [31:0] mem_result
 );
 
 wire es_ready_go = 1'b1; // EXE 阶段无内部停顿，始终准备好
@@ -92,6 +94,7 @@ wire [31:0] csr_rdata;
 wire exe_mem_we;
 wire exe_mem_re;
 wire [2:0] exe_mem_size;
+wire [1:0] exe_lw_rs_dependency; // 从ID阶段传来的加载相关数据冒险检测结果
 assign {
     exe_pc,
     exe_imm,
@@ -106,6 +109,7 @@ assign {
     exe_rd_addr,
     exe_wb_sel,
     exe_csr_cmd,
+    exe_lw_rs_dependency,
     exe_csr_we,
     exe_csr_addr,
     csr_rdata,
@@ -115,16 +119,18 @@ assign {
 } = ds_to_es_bus_r;
 
 // ALU操作数选择
+wire [31:0] real_rs1_data = exe_lw_rs_dependency[0] ? mem_result : exe_rs1_data;
+wire [31:0] real_rs2_data = exe_lw_rs_dependency[1] ? mem_result : exe_rs2_data;
 wire [31:0] op1_data;
 wire [31:0] op2_data;
-assign op1_data = exe_op1_sel[3] ? mult_result : // 来自单独乘法器的结果前递
-                  exe_op1_sel[2] ? exe_rs1_data :
+assign op1_data = exe_op1_sel[3] ? mult_result :
+                  exe_op1_sel[2] ? real_rs1_data :
                   exe_op1_sel[1] ? exe_pc :
                   exe_op1_sel[0] ? exe_imm : 32'b0;
 assign op2_data = |exe_csr_cmd ? csr_rdata :
-                    exe_op2_sel[2] ? mult_result : // 来自单独乘法器的结果前递
-                    exe_op2_sel[1] ? exe_rs2_data :
-                    exe_op2_sel[0] ? exe_imm : 32'b0;
+                  exe_op2_sel[2] ? mult_result :
+                  exe_op2_sel[1] ? real_rs2_data :
+                  exe_op2_sel[0] ? exe_imm : 32'b0;
 
 // ALU计算结果
 wire ALU_ADD;          //加法

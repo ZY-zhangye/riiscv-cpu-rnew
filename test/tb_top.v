@@ -45,7 +45,7 @@ always #5 clk = ~clk; // 100MHz
 initial begin
     $display("Starting simulation...");
     $dumpfile("tb_top.vcd");    // 指定波形文件名
-    $dumpvars(0, tb_top);   // 0表示tb_top模块及其所有子模块
+    $dumpvars(0, u_my_cpu);   // 0表示tb_top模块及其所有子模块
     #25000; // 设定最大结束时间，避免仿真无限进行
     $display("----------------------------------------------");
     $display("Simulation timeout.");

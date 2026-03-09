@@ -40,14 +40,15 @@ wire [31:0] data_ram_wdata;
 
 wire [52:0] dmem_write_bus;
 wire [48:0] imem_write_bus;
-//wire reset;
+wire res;
 wire mem_valid;
+assign reset = res;
 
 assign debug_inst_pc = imem_addr - 4;
 
 top u_top(
     .clk(clk),
-    .rst_n(reset),
+    .rst_n(res),
     .debug_wb_pc(debug_wb_pc),
     .debug_wb_rf_wen(debug_wb_rf_wen),
     .debug_wb_rf_wnum(debug_wb_rf_wnum),
@@ -88,7 +89,7 @@ bridge u_bridge(
     .dmem_write_bus(dmem_write_bus),
     .imem_write_bus(imem_write_bus),
     .mem_valid(mem_valid),
-    .reset(reset)
+    .reset(res)
 );
 
 inst_ram  #(
@@ -125,7 +126,7 @@ uart_bootloader uart_bootloader_inst (
     .dmem_write_bus(dmem_write_bus),
     .imem_write_bus(imem_write_bus),
     .mem_valid(mem_valid),
-    .reset(reset)
+    .reset(res)
 );
 
 endmodule

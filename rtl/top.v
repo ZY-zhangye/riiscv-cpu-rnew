@@ -68,6 +68,7 @@ wire [5:0] exception_code;
 wire [31:0] exception_mtval;
 wire timer_interrupt_flag;
 wire [4:0] interrupt_code;
+wire [31:0] mem_result; // 从数据存储器前递的结果
 // WB 阶段
 wire rf_we;
 wire [4:0] rf_waddr;
@@ -166,7 +167,8 @@ exe_stage u_exe_stage (
     .exception_code_em(exception_code_em),
     .exception_mtval_em(exception_mtval_em),
     .exception_flag(exception_flag),
-    .mult_result(mul_result) // 从单独乘法器模块接收计算结果
+    .mult_result(mul_result), // 从单独乘法器模块接收计算结果
+    .mem_result(mem_result) // 从数据存储器前递的结果
 );
 
 mem_stage u_mem_stage (
@@ -192,7 +194,8 @@ mem_stage u_mem_stage (
     .exception_mtval(exception_mtval),
     .timer_interrupt_flag(timer_interrupt_flag),
     .interrupt_code(interrupt_code),
-    .mul_result(mul_result) // 从单独乘法器模块接收计算结果
+    .mul_result(mul_result), // 从单独乘法器模块接收计算结果
+    .mem_result(mem_result) // 从数据存储器前递的结果
 );
 
 wb_stage u_wb_stage (
