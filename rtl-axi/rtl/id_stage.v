@@ -27,6 +27,8 @@ module id_stage (
     input wire mem_data_wen,
     input wire [4:0] mem_data_addr,
     input wire [31:0] mem_data,
+    input wire mem_load_pending,
+    input wire [4:0] mem_load_rd,
     //数据前递路径--执行阶段
     input wire exe_data_wen,
     input wire [4:0] exe_data_addr,
@@ -260,9 +262,13 @@ wire [1:0] lw_rs_dependency = 2'b00;
 wire need_rs1 = is_op_reg || is_op_imm || is_load || is_store || is_branch || is_jalr ||
                 inst_csrrw || inst_csrrs || inst_csrrc;
 wire need_rs2 = is_op_reg || is_store || is_branch;
-assign load_use_hazard = ds_valid && exe_load_valid && (exe_data_addr != 5'b0) &&
+wire exe_load_hazard = exe_load_valid && (exe_data_addr != 5'b0) &&
                        ((need_rs1 && (reg_addr1 == exe_data_addr)) ||
                         (need_rs2 && (reg_addr2 == exe_data_addr)));
+wire mem_load_hazard = mem_load_pending && (mem_load_rd != 5'b0) &&
+                       ((need_rs1 && (reg_addr1 == mem_load_rd)) ||
+                        (need_rs2 && (reg_addr2 == mem_load_rd)));
+assign load_use_hazard = ds_valid && (exe_load_hazard || mem_load_hazard);
 
 //ALU操作类型
 wire ALU_ADD = is_load || is_store || inst_add || inst_lui || inst_auipc || is_jal || is_branch;          //加法
@@ -283,14 +289,14 @@ wire [12:0] alu_op = {ALU_ADD, ALU_ADDI, ALU_SUB, ALU_AND, ALU_OR, ALU_XOR,
                    ALU_JALR, ALU_COPY1};
 
 //跳转与分支指令标志
-wire [2:0] br_type; // 送往EXE的分支类型信号
+// one-hot分支类型：每位对应一种分支，EXE直接与比较结果做与运算，消除编码译码选择链
+wire br_beq  = inst_beq;
+wire br_bne  = inst_bne;
+wire br_blt  = inst_blt;
+wire br_bge  = inst_bge;
+wire br_bltu = inst_bltu;
+wire br_bgeu = inst_bgeu;
 wire jmp_flag = is_jal || is_jalr; // 跳转指令标志
-assign br_type = inst_beq ? 3'b001 :
-                 inst_bne ? 3'b010 :
-                 inst_blt ? 3'b011 :
-                 inst_bge ? 3'b100 :
-                 inst_bltu ? 3'b101 :
-                 inst_bgeu ? 3'b110 : 3'b000;
 
 //写回寄存器相关
 wire [2:0] wb_sel; 
@@ -332,7 +338,7 @@ assign id_exe_bus_out = {
     rs2_data,   // [31:0] rs2_data
     {op1_sel, op2_sel}, // [4:0] 操作数选择信号
     alu_op,     // [12:0] ALU操作类型信号
-    {br_type, jmp_flag}, //[3:0] 分支类型和跳转标志
+    {br_beq, br_bne, br_blt, br_bge, br_bltu, br_bgeu, jmp_flag}, //[6:0] one-hot分支类型 + 跳转标志
     rd_wen,         // 送往EXE的寄存器写使能
     rd_out,         //[4:0] 目的寄存器地址
     wb_sel,         //[1:0] 送往EXE的写回数据选择信号

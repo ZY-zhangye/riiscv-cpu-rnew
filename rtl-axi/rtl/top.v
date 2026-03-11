@@ -58,6 +58,11 @@ wire [31:0] br_target;
 wire br_taken;
 wire [5:0] exception_code_em;
 wire [31:0] exception_mtval_em;
+wire exception_iam_em;
+wire exception_lam_em;
+wire exception_sam_em;
+wire [31:0] exception_addr_mtval_em;
+wire [31:0] exception_iam_mtval_em;
 // MEM 阶段
 wire ms_to_ws_valid;
 wire ws_allowin;
@@ -65,6 +70,8 @@ wire [`MS_TO_WS_BUS_WD-1:0] mem_wb_bus;
 wire [31:0] mem_id_data;
 wire [4:0] mem_id_waddr;
 wire mem_id_we;
+wire mem_load_pending;
+wire [4:0] mem_load_rd;
 wire csr_we;
 wire [11:0] csr_addr;
 wire [31:0] csr_wdata;
@@ -127,6 +134,8 @@ id_stage u_id_stage (
     .mem_data_wen(mem_id_we),
     .mem_data_addr(mem_id_waddr),
     .mem_data(mem_id_data),
+    .mem_load_pending(mem_load_pending),
+    .mem_load_rd(mem_load_rd),
     .exe_data_wen(exe_id_we),
     .exe_data_addr(exe_id_waddr),
     .exe_data(exe_id_data),
@@ -174,6 +183,11 @@ exe_stage u_exe_stage (
     .exception_mtval_de(exception_mtval_de),
     .exception_code_em(exception_code_em),
     .exception_mtval_em(exception_mtval_em),
+    .exception_iam_em(exception_iam_em),
+    .exception_lam_em(exception_lam_em),
+    .exception_sam_em(exception_sam_em),
+    .exception_addr_mtval_em(exception_addr_mtval_em),
+    .exception_iam_mtval_em(exception_iam_mtval_em),
     .exception_flag(exception_flag),
     .mult_result(mul_result) // 从单独乘法器模块接收计算结果
 );
@@ -195,8 +209,15 @@ mem_stage u_mem_stage (
     .mem_id_data(mem_id_data),
     .mem_id_waddr(mem_id_waddr),
     .mem_id_we(mem_id_we),
+    .mem_load_pending(mem_load_pending),
+    .mem_load_rd(mem_load_rd),
     .exception_code_em(exception_code_em),
     .exception_mtval_em(exception_mtval_em),
+    .exception_iam_em(exception_iam_em),
+    .exception_lam_em(exception_lam_em),
+    .exception_sam_em(exception_sam_em),
+    .exception_addr_mtval_em(exception_addr_mtval_em),
+    .exception_iam_mtval_em(exception_iam_mtval_em),
     .exception_flag(exception_flag),
     .exception_code(exception_code),
     .exception_mtval(exception_mtval),

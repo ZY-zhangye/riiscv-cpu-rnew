@@ -27,8 +27,24 @@ module buffer_fifo(
 
     // 写时采样条件
     wire sample_en = (|data_wstrb) | data_ren;
-    reg  sample_en_d;
-    wire sample_pulse = sample_en & ~sample_en_d;
+    wire load_req = data_ren && !(|data_wstrb);
+    wire store_req = |data_wstrb;
+    reg        sample_en_d;
+    reg        req_pending;
+    reg [31:0] data_addr_d;
+    reg [31:0] data_wdata_d;
+    reg [3:0]  data_wstrb_d;
+    reg        data_ren_d;
+    wire last_load_req = data_ren_d && !(|data_wstrb_d);
+    wire last_store_req = |data_wstrb_d;
+    wire same_load_req = load_req && last_load_req && (data_addr == data_addr_d);
+    wire same_store_req = store_req && last_store_req &&
+                          (data_addr == data_addr_d) &&
+                          (data_wstrb == data_wstrb_d) &&
+                          (data_wdata == data_wdata_d);
+    wire same_req_as_prev = same_load_req | same_store_req;
+    wire new_req_seen = sample_en & (!sample_en_d | !same_req_as_prev);
+    wire enqueue_fire = req_pending | new_req_seen;
 
     // 写指针与计数器（写时钟域）
     always @(posedge wr_clk or negedge wr_rst_n) begin
@@ -36,10 +52,30 @@ module buffer_fifo(
             wr_ptr <= 0;
             fifo_cnt_wr <= 0;
             sample_en_d <= 0;
+            req_pending <= 0;
+            data_addr_d <= 32'b0;
+            data_wdata_d <= 32'b0;
+            data_wstrb_d <= 4'b0;
+            data_ren_d <= 1'b0;
         end else begin
             sample_en_d <= sample_en;
-            // 仅在请求上升沿入队，避免上游请求保持高电平时重复入队
-            if (sample_pulse && !full) begin
+            if (sample_en) begin
+                data_addr_d <= data_addr;
+                data_wdata_d <= data_wdata;
+                data_wstrb_d <= data_wstrb;
+                data_ren_d <= data_ren;
+            end
+
+            if (!sample_en)
+                req_pending <= 1'b0;
+            else if (enqueue_fire && !full)
+                req_pending <= 1'b0;
+            else if (new_req_seen)
+                req_pending <= 1'b1;
+
+            // 请求有效且与上一拍相比是新请求时入队：
+            // 1) 上升沿第一拍；2) 连续有效但内容变化（背靠背不同指令）
+            if (enqueue_fire && !full) begin
                 fifo_addr[wr_ptr]  <= data_addr;
                 fifo_wdata[wr_ptr] <= data_wdata;
                 fifo_wstrb[wr_ptr] <= data_wstrb;
