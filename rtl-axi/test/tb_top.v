@@ -1,4 +1,4 @@
-`define MEM_HEX_PATH "C:\\Users\\ZY\\Desktop\\riscv-cpu-axi-test\\hex\\riscv-tests\\rv32ui-p-add.hex"
+`define MEM_HEX_PATH "C:\\Users\\ZY\\Desktop\\riscv-cpu-axi-test\\hex\\riscv-tests\\rv32-p-riscv.hex"
 // 加载内存文件
 /*# 定义【标准整数运算指令集】数组 - RV32I 基础指令全集
 UI_INSTS=(sw lw add addi sub and andi or ori xor xori 
@@ -44,7 +44,6 @@ reg [31:0] read_data_hold;
 reg        read_pending;
 
 my_cpu  #(
-    .MEM_HEX_PATH(`MEM_HEX_PATH)
 ) u_my_cpu(
     .clk(clk),
     .rst_n(rst_n),

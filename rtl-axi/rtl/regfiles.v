@@ -1,3 +1,4 @@
+`include "defines.v"
 module regfiles (
     input wire clk,
     input wire rst_n,
@@ -10,9 +11,12 @@ module regfiles (
     output wire [31:0] rdata1,
     //读端口2
     input wire [4:0] raddr2,
-    output wire [31:0] rdata2,
+    output wire [31:0] rdata2
     //debug端口
+`ifdef DEBUG_EN
+    ,
     output wire [31:0] debug_data
+`endif
 );
 
     reg [31:0] regs[31:0];
@@ -31,6 +35,9 @@ module regfiles (
     assign rdata1 = (raddr1 == 5'b0) ? 32'b0 : regs[raddr1];
     assign rdata2 = (raddr2 == 5'b0) ? 32'b0 : regs[raddr2];
 
+`ifdef DEBUG_EN
+    // 输出调试信息，例如可以输出某个寄存器的值
     assign debug_data = regs[3]; // 例如输出x3寄存器的值作为调试信息
+`endif
 
 endmodule

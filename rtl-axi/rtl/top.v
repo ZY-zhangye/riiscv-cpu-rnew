@@ -2,6 +2,14 @@
 module top (
     input wire clk,
     input wire rst_n,
+    //调试接口
+`ifdef DEBUG_EN
+    output wire [31:0] debug_wb_pc,
+    output wire  debug_wb_rf_wen,
+    output wire [4:0] debug_wb_rf_wnum,
+    output wire [31:0] debug_wb_rf_wdata,
+    output wire [31:0] debug_data,
+`endif
     //指令存储器接口
     output wire [31:0] imem_addr,
     input wire [31:0] imem_rdata,
@@ -14,13 +22,7 @@ module top (
     input wire [31:0] dmem_rdata,
     output wire dmem_en,
     input wire dmem_stall,
-    input wire dmem_rvalid,
-    //调试接口
-    output wire [31:0] debug_wb_pc,
-    output wire  debug_wb_rf_wen,
-    output wire [4:0] debug_wb_rf_wnum,
-    output wire [31:0] debug_wb_rf_wdata,
-    output wire [31:0] debug_data
+    input wire dmem_rvalid
 );
 // IF 阶段
 wire fs_to_ds_valid;
@@ -91,9 +93,11 @@ wire [31:0] b;
 wire [3:0] op;
 
 //debug接口
+`ifdef DEBUG_EN
 assign debug_wb_rf_wen = rf_we;
 assign debug_wb_rf_wnum = rf_waddr;
 assign debug_wb_rf_wdata = rf_wdata;
+`endif
 
 if_stage u_if_stage (
     .clk(clk),
@@ -235,8 +239,11 @@ wb_stage u_wb_stage (
     .mem_wb_bus(mem_wb_bus),
     .rf_we(rf_we),
     .rf_waddr(rf_waddr),
-    .rf_wdata(rf_wdata),
+    .rf_wdata(rf_wdata)
+`ifdef DEBUG_EN
+    ,
     .debug_wb_pc(debug_wb_pc)
+`endif
 );
 
 regfiles u_regfiles (
@@ -248,8 +255,11 @@ regfiles u_regfiles (
     .raddr1(reg_addr1),
     .rdata1(reg_data1),
     .raddr2(reg_addr2),
-    .rdata2(reg_data2),
+    .rdata2(reg_data2)
+`ifdef DEBUG_EN
+    ,
     .debug_data(debug_data)
+`endif
 );
 
 regfiles_csr u_regfiles_csr (

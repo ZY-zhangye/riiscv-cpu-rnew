@@ -1,10 +1,11 @@
+`include "defines.v"
 module my_cpu #(
-    parameter MEM_HEX_PATH = "C:\\Users\\ZY\\Desktop\\riiscv-cpu-rnew\\hex\\riscv-tests\\rv32ui-p-auipc.hex",
     parameter IF_MAX_CONSECUTIVE_GRANTS = 8
 )
 (
     input wire clk,
     input wire rst_n,
+`ifdef DEBUG_EN
     //debug接口
     output wire [31:0] debug_inst_pc,
     output wire [31:0] debug_wb_pc,
@@ -12,6 +13,7 @@ module my_cpu #(
     output wire [4:0] debug_wb_rf_wnum,
     output wire [31:0] debug_wb_rf_wdata,
     output wire [31:0] debug_data,
+`endif
     //单套AXI4-Lite接口（仲裁后输出）
     output wire [31:0] axi_araddr,
     output wire        axi_arvalid,
@@ -29,10 +31,9 @@ module my_cpu #(
     input  wire        axi_wready,
     input  wire [1:0]  axi_bresp,
     input  wire        axi_bvalid,
-    output wire        axi_bready,
-    //外设接口
-    output reg [3:0] led
+    output wire        axi_bready
 );
+
 wire [31:0] imem_addr;
 wire [31:0] imem_rdata;
 wire imem_rvalid;
@@ -45,16 +46,20 @@ wire dmem_rvalid;
 wire dmem_stall;
 wire dmem_en;
 
+`ifdef DEBUG_EN
 assign debug_inst_pc = imem_addr - 4;
+`endif
 
 top u_top(
     .clk(clk),
     .rst_n(rst_n),
+`ifdef DEBUG_EN
     .debug_wb_pc(debug_wb_pc),
     .debug_wb_rf_wen(debug_wb_rf_wen),
     .debug_wb_rf_wnum(debug_wb_rf_wnum),
     .debug_wb_rf_wdata(debug_wb_rf_wdata),
     .debug_data(debug_data),
+`endif
     .imem_addr(imem_addr),
     .imem_rdata(imem_rdata),
     .imem_rvalid(imem_rvalid),
@@ -208,13 +213,5 @@ assign buf_axi_wready = axi_wready;
 // 非OKAY也需要通知buffer事务结束，避免写通道死锁
 assign buf_axi_bvalid = axi_bvalid;
 assign axi_bready = buf_axi_bready;
-
-// ============ 简单IO示例：LED映射 ============
-always @(posedge clk or negedge rst_n) begin
-    if (!rst_n)
-        led <= 4'b1111;
-    else if ((|dmem_wen) && (dmem_addr[31:28] == 4'h8))
-        led <= dmem_wdata[3:0];
-end
 
 endmodule

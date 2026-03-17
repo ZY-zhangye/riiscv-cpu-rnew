@@ -252,7 +252,7 @@ module buffer(
             case (axi_state)
                 AXI_IDLE: begin
                     if (fifo_valid && fifo_q_ren) begin
-                        axi_araddr <= fifo_q_addr; // 直接从FIFO捕获地址，无额外延迟
+                        axi_araddr <= {4'h6, fifo_q_addr[27:0]}; // 强制最高4位为6
                         axi_arvalid <= 1'b1; // 发起读地址请求
                     end else begin
                         axi_arvalid <= 1'b0;
@@ -308,7 +308,7 @@ module buffer(
             case (axi_state)
                 AXI_IDLE: begin
                     if (fifo_valid && !fifo_q_ren) begin
-                        axi_awaddr <= fifo_q_addr; // 直接从FIFO捕获地址，无额外延迟
+                        axi_awaddr <= {4'h6, fifo_q_addr[27:0]}; // 强制最高4位为8
                         axi_wdata <= fifo_q_wdata; // 直接从FIFO捕获数据
                         axi_wstrb <= fifo_q_wstrb; // 直接从FIFO捕获写使能
                         axi_awvalid <= 1'b1; // 发起写地址请求

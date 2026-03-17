@@ -10,9 +10,12 @@ module wb_stage (
     //写回寄存器堆的信号
     output wire rf_we,
     output wire [4:0] rf_waddr,
-    output wire [31:0] rf_wdata,
+    output wire [31:0] rf_wdata
     //调试接口
+`ifdef DEBUG_EN
+    ,
     output wire [31:0] debug_wb_pc
+`endif
 );
 
 wire ws_ready_go = 1'b1; // WB 阶段无内部停顿，始终准备好
@@ -45,5 +48,7 @@ end
 assign rf_we = ws_valid && wb_gr_we; // 写使能仅在WB阶段有效且需要写回时才有效
 assign rf_waddr = wb_dest; // 写回寄存器地址
 assign rf_wdata = wb_result; // 写回数据
+`ifdef DEBUG_EN
 assign debug_wb_pc = wb_pc;
+`endif
 endmodule

@@ -256,7 +256,6 @@ wire op2_imm = (is_op_imm || is_load || is_store || is_jal || is_jalr || is_bran
 wire op2_mult; //同上具体产生条件见下
 assign op2_sel = {op2_mult, op2_rs2, op2_imm};
 wire rd_wen = (is_op_reg || is_op_imm || is_load || is_lui || is_auipc || is_system || is_jal || is_jalr) ? 1'b1 : 1'b0;
-wire [1:0] lw_rs_dependency = 2'b00;
 
 // load-use 数据冒险检测：对load结果使用1拍气泡，避免MEM->EXE同拍超长前递路径
 wire need_rs1 = is_op_reg || is_op_imm || is_load || is_store || is_branch || is_jalr ||
@@ -271,8 +270,7 @@ wire mem_load_hazard = mem_load_pending && (mem_load_rd != 5'b0) &&
 assign load_use_hazard = ds_valid && (exe_load_hazard || mem_load_hazard);
 
 //ALU操作类型
-wire ALU_ADD = is_load || is_store || inst_add || inst_lui || inst_auipc || is_jal || is_branch;          //加法
-wire ALU_ADDI = inst_addi;                  //加法（立即数）        
+wire ALU_ADD = is_load || is_store || inst_add || inst_lui || inst_auipc || is_jal || is_branch || inst_addi;          //加法
 wire ALU_SUB = inst_sub;           //减法
 wire ALU_AND = inst_and || inst_andi;           //按位与
 wire ALU_OR = inst_or || inst_ori;            //按位或
@@ -284,7 +282,7 @@ wire ALU_SLT = inst_slt || inst_slti;           //有符号比较小于
 wire ALU_SLTU = inst_sltu || inst_sltiu;          //无符号比较小于
 wire ALU_JALR = is_jalr;          //JALR指令的ALU操作（计算跳转地址）
 wire ALU_COPY1 = is_system ? 1'b1 : 1'b0;         //仅将第一个操作数传递到EXE阶段（用于CSR指令，ALU不进行计算）
-wire [12:0] alu_op = {ALU_ADD, ALU_ADDI, ALU_SUB, ALU_AND, ALU_OR, ALU_XOR,
+wire [11:0] alu_op = {ALU_ADD,  ALU_SUB, ALU_AND, ALU_OR, ALU_XOR,
                    ALU_SLL, ALU_SRL, ALU_SRA, ALU_SLT, ALU_SLTU,
                    ALU_JALR, ALU_COPY1};
 
@@ -337,13 +335,12 @@ assign id_exe_bus_out = {
     rs1_data,   // [31:0] rs1_data
     rs2_data,   // [31:0] rs2_data
     {op1_sel, op2_sel}, // [4:0] 操作数选择信号
-    alu_op,     // [12:0] ALU操作类型信号
+    alu_op,     // [11:0] ALU操作类型信号
     {br_beq, br_bne, br_blt, br_bge, br_bltu, br_bgeu, jmp_flag}, //[6:0] one-hot分支类型 + 跳转标志
     rd_wen,         // 送往EXE的寄存器写使能
     rd_out,         //[4:0] 目的寄存器地址
     wb_sel,         //[1:0] 送往EXE的写回数据选择信号
     csr_cmd,        //[3:0] 送往EXE的CSR操作类型信号
-    lw_rs_dependency, //[1:0] 送往EXE的加载相关数据冒险检测结果
     csr_we,         // 送往EXE的CSR写使能
     csr_waddr,      //[11:0] 送往EXE的CSR写地址
     csr_rdata_out,  //[31:0] 直接送往EXE阶段的CSR寄存器读出数据
@@ -352,8 +349,6 @@ assign id_exe_bus_out = {
     mem_size   //[2:0] 非对齐访存的字节数
 };
 
-//加载相关数据冒险检测
-// 旧的lw_rs_dependency同拍前递路径已关闭，保留字段兼容总线定义
 
 //异常相关输出
 assign exception_code_de = (inst_ecall && ds_allowin) ? 6'b101011 

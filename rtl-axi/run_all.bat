@@ -21,7 +21,7 @@ for %%i in (%UI_INSTS%) do (
     echo.
     echo ====== Simulating rv32ui-p-%%i ======
     copy /Y "hex\riscv-tests\rv32ui-p-%%i.hex" "hex\riscv-tests\rv32-p-riscv.hex" >nul
-    vsim -c -do "run -all; quit -force" tb_top > results\%%i.txt
+    vsim -c -do "run -all; quit -force" tb_test > results\%%i.txt
     findstr /C:"Test passed." results\%%i.txt >nul
     if errorlevel 1 (
         powershell -Command "Write-Host '[FAILED] rv32ui-p-%%i' -ForegroundColor Red"
@@ -40,7 +40,7 @@ for %%i in (%MI_INSTS%) do (
     echo.
     echo ====== Simulating rv32mi-p-%%i ======
     copy /Y "hex\riscv-tests\rv32mi-p-%%i.hex" "hex\riscv-tests\rv32-p-riscv.hex" >nul
-    vsim -c -do "run -all; quit -force" tb_top > results\%%i.txt
+    vsim -c -do "run -all; quit -force" tb_test > results\%%i.txt
     findstr /C:"Test passed." results\%%i.txt >nul
     if errorlevel 1 (
         powershell -Command "Write-Host '[FAILED] rv32mi-p-%%i' -ForegroundColor Red"
@@ -59,7 +59,7 @@ for %%i in (%UM_INSTS%) do (
     echo.
     echo ====== Simulating rv32um-p-%%i ======
     copy /Y "hex\riscv-tests\rv32um-p-%%i.hex" "hex\riscv-tests\rv32-p-riscv.hex" >nul
-    vsim -c -do "run -all; quit -force" tb_top > results\%%i.txt
+    vsim -c -do "run -all; quit -force" tb_test > results\%%i.txt
     findstr /C:"Test passed." results\%%i.txt >nul
     if errorlevel 1 (
         powershell -Command "Write-Host '[FAILED] rv32um-p-%%i' -ForegroundColor Red"
