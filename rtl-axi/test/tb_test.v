@@ -1,4 +1,4 @@
-`define MEM_HEX_PATH "C:\\Users\\ZY\\Desktop\\riscv-cpu-axi-test\\hex\\riscv-tests\\rv32-p-riscv.hex"
+`define MEM_HEX_PATH "C:\\Users\\ZY\\Desktop\\riscv-cpu-rnew\\hex\\timer.hex"
 // 加载内存文件
 /*# 定义【标准整数运算指令集】数组 - RV32I 基础指令全集
 UI_INSTS=(sw lw add addi sub and andi or ori xor xori 
@@ -19,10 +19,18 @@ wire [4:0] debug_wb_rf_wnum;
 wire [31:0] debug_wb_rf_wdata;
 wire [31:0] debug_data;
 wire [3:0] led;
+reg clk_uart;
+reg rx;
+wire tx;
 
 initial begin
     clk = 0;
     forever #5 clk = ~clk; // 100MHz 时钟
+end
+initial begin
+    clk_uart = 0;
+    rx = 1; // UART 接收线默认高电平
+    forever #100 clk_uart = ~clk_uart; // 115200 波特率时钟
 end
 initial begin
     rst_n = 0;
@@ -41,7 +49,11 @@ cpu_top #(
     .debug_wb_rf_wnum(debug_wb_rf_wnum),
     .debug_wb_rf_wdata(debug_wb_rf_wdata),
     .debug_data(debug_data),
-    .led(led)
+    .led(led),
+    .clk_uart(clk_uart),
+    .rx(rx),
+    .tx(tx)
+
 );
 
 initial begin
@@ -67,7 +79,7 @@ always @ (posedge clk) begin
     end
 end
 
-always @ (posedge clk) begin
+/*always @ (posedge clk) begin
     if (rst_n) begin
         if (debug_wb_pc == 32'h00000044) begin
                 $display("---------------------------------------------");
@@ -83,6 +95,6 @@ always @ (posedge clk) begin
             $stop;
         end
     end
-end
+end*/
 
 endmodule

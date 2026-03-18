@@ -28,8 +28,8 @@ reg [31:0] mvendorid;
 reg [31:0] marchid;
 reg [31:0] mimpid;
 reg [31:0] mscratch;
-wire mret_flag = & exception_code[4:0]; // mret指令的异常代码
-wire plic_int_flag = exception_code == 6'b111111; // PLIC中断的异常代码
+wire mret_flag = (exception_code == 6'b011111); // mret指令的异常代码
+wire plic_int_flag = (exception_code == 6'b111111); // PLIC中断的异常代码
 reg prev_exception_flag;
 
 //CSR寄存器写操作

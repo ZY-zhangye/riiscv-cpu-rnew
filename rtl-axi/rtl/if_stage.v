@@ -77,19 +77,40 @@ module if_stage (
     reg redirect_now_d;             // 上一拍redirect_now(用于检测沿)
     reg drop_resp_pending;          // 标志: 有一条旧响应待丢弃
 
+    //由于exception_flag是外部输入的电平信号，可能持续多拍，因此需要一个寄存器来记录上拍的状态，以便检测重定向事件(沿)。
+    reg exception_flag_reg;
+    reg [31:0] exception_addr_reg;
+    always @ (*) begin
+        if (!rst_n) begin
+            exception_flag_reg = 1'b0;
+            exception_addr_reg = 32'b0;
+        end else if (exception_flag) begin
+            exception_flag_reg = 1'b1;
+            exception_addr_reg = exception_addr;
+        end else if (fs_to_ds_valid) begin
+            // 当指令成功送出时，清除异常标志(假设异常处理器会在ID阶段接收并处理异常)
+            exception_flag_reg = 1'b0;
+            exception_addr_reg = 32'b0;
+        end else begin
+            // 其他情况保持原值
+            exception_flag_reg = exception_flag_reg;
+            exception_addr_reg = exception_addr_reg;
+        end
+    end
+
     // ========== PC 计算逻辑 ==========
     // 下一拍要发的请求PC，优先级：异常 > 分支 > 顺序
     // 重要：顺序PC = req_pc+4，不用fs_pc
     //   原因：fs_pc代表当前输出给ID的指令地址，可能因旁路/背压与最新请求不同；
     //        req_pc始终记录"最近一次发出的请求"，是PC计算的正确参考
-    assign issue_pc = exception_flag ? exception_addr :
+    assign issue_pc = exception_flag_reg ? exception_addr_reg :
                       br_jmp_flag ? br_target :
                       (req_pc + 32'd4);
 
     // ========== 握手与返回有效性判定 ==========
     wire fs_ready_go = 1'b1; // IF阶段总是准备好(传播性强，不主动暂停)
     
-    assign redirect_now = exception_flag || br_jmp_flag; // 电平：本拍发生重定向
+    assign redirect_now = exception_flag_reg || br_jmp_flag; // 电平：本拍发生重定向
     assign redirect_event = redirect_now && !redirect_now_d; // 事件：重定向上升沿(仅1拍脉冲)
     
     assign inst_resp_valid = req_pending && inst_valid; // 有返回(在途请求 AND 返回数据有效)

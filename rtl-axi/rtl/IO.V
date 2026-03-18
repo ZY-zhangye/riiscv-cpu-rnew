@@ -7,7 +7,7 @@ module IO(
     input wire [31:0] wdata,
     input wire [3:0] wstrb,
     input wire ren,
-    output reg [31:0] rdata,
+    output wire [31:0] rdata,
     output wire [3:0] led,
     input wire rx,
     output wire tx,
@@ -36,6 +36,7 @@ module IO(
     wire timer_int;
 
     wire [15:0] IO_ADDR_BASE = addr[31:16]; // 16位地址线用于外设地址解码
+    wire [15:0] io_addr = addr[15:0]; // 16字节对齐
     reg IO_UART;
     reg IO_TIMER;
     reg IO_LED;
@@ -98,12 +99,18 @@ module IO(
     assign plic_wen = IO_PLIC && (|wstrb) && !ren; // PLIC写使能
     assign plic_ren = IO_PLIC && ren; // PLIC读使能
 
+    assign rdata = IO_UART ? uart_rdata :
+                   IO_TIMER ? timer_rdata :
+                   IO_LED ? led_rdata :
+                   IO_PLIC ? plic_rdata :
+                   32'b0; // 默认读数据为0
+
     //实例化外设模块
     UART u_uart (
         .clk(clk),
         .rst_n(rst_n),
         .clk_uart(clk_uart),
-        .addr(addr[17:2]), // 16字节对齐，地址最低2位不参与解码
+        .addr(io_addr), // 16字节对齐
         .wdata(wdata),
         .we(uart_wen),
         .re(uart_ren),
@@ -117,7 +124,7 @@ module IO(
     timer u_timer (
         .clk(clk),
         .rst_n(rst_n),
-        .addr(addr[17:2]), // 16字节对齐，地址最低2位不参与解码
+        .addr(io_addr), // 16字节对齐
         .wdata(wdata),
         .we(timer_wen),
         .re(timer_ren),
@@ -128,7 +135,7 @@ module IO(
     led u_led (
         .clk(clk),
         .rst_n(rst_n),
-        .addr(addr[17:2]), // 16字节对齐，地址最低2位不参与解码
+        .addr(io_addr), // 16字节对齐
         .wdata(wdata),
         .we(led_wen),
         .re(led_ren),
@@ -139,7 +146,7 @@ module IO(
     PLIC u_plic (
         .clk(clk),
         .rst_n(rst_n),
-        .cpu_addr(addr[17:2]), // 16字节对齐，地址最低2位不参与解码
+        .cpu_addr(io_addr), // 16字节对齐
         .cpu_wdata(wdata),
         .cpu_wen(plic_wen),
         .cpu_ren(plic_ren),

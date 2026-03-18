@@ -85,6 +85,7 @@ always @(posedge clk or negedge rst_n) begin
         timer_ctrl <= 0;
         timer_intclr <= 0;
         timer_prescaler <= 0;
+        rdata <= 0;
     end else if (re) begin
         case (addr)
             `TIMER_LOAD: rdata = timer_load;

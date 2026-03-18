@@ -81,8 +81,6 @@ always @(posedge clk or negedge rst_n) begin
         if_id_bus_reg <= 0;
         exception_code_reg <= 0;
         exception_mtval_reg <= 0;
-        plic_int_reg <= 0;
-        plic_int_id_reg <= 0;
     end else if (ds_allowin && fs_to_ds_valid) begin
         if (br_jmp_flag || exception_flag) begin
             if_id_bus_reg <= {nop, if_id_bus_in[31:0]}; // 只保留PC，指令置为NOP
@@ -92,9 +90,19 @@ always @(posedge clk or negedge rst_n) begin
             if_id_bus_reg <= if_id_bus_in;
             exception_code_reg <= exception_code_fd;
             exception_mtval_reg <= exception_mtval_fd;
-            plic_int_reg <= plic_int;
-            plic_int_id_reg <= plic_int_id;
         end
+    end
+end
+always @ (posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        plic_int_reg <= 1'b0;
+        plic_int_id_reg <= 16'b0;
+    end else if (plic_int) begin
+        plic_int_reg <= plic_int;
+        plic_int_id_reg <= plic_int_id;
+    end else if (ds_to_es_valid) begin
+        plic_int_reg <= 1'b0; // 在指令正常流转到ID阶段时清除中断标志，避免重复响应同一个中断
+        plic_int_id_reg <= 16'b0;
     end
 end
 wire [31:0] id_inst;
@@ -360,12 +368,12 @@ assign id_exe_bus_out = {
 
 
 //异常相关输出
-assign exception_code_de =  plic_int ? 6'b111111
+assign exception_code_de =  plic_int_reg ? 6'b111111
                             : (inst_ecall && ds_allowin) ? 6'b101011 
                             : (inst_ebreak && ds_allowin) ? 6'b100011
                             : (inst_mret && ds_allowin) ? 6'b011111
                             : exception_code_reg; 
-assign exception_mtval_de = plic_int ? {16'b0, plic_int_id_reg} // 将中断号放在mtval的低16位，高16位清零
+assign exception_mtval_de = plic_int_reg ? {16'b0, plic_int_id_reg} // 将中断号放在mtval的低16位，高16位清零
                             : (inst_ecall && ds_allowin) ? 32'b0 
                             : (inst_ebreak && ds_allowin) ? 32'b0
                             : (inst_mret && ds_allowin) ? 32'b0

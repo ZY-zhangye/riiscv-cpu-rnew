@@ -182,6 +182,9 @@ module buffer(
     localparam AXI_WRITE_DATA = 3'b011;
     localparam AXI_WRITE_DOWN = 3'b100;
 
+    // 数据侧默认映射到 0x6___ ____ 空间；若CPU显式访问 0x8___ ____ ，则保留给IO空间。
+    wire [31:0] axi_mapped_addr = (fifo_q_addr[31:28] == 4'h8) ? fifo_q_addr : {4'h6, fifo_q_addr[27:0]};
+
     // 读fifo逻辑：使用 axi_state 来替代独立的 AXI_READ/AXI_WRITE 标志
     wire fifo_pop_valid = fifo_valid && (axi_state == AXI_IDLE) && (axi_next_state != AXI_IDLE);
     
@@ -252,7 +255,7 @@ module buffer(
             case (axi_state)
                 AXI_IDLE: begin
                     if (fifo_valid && fifo_q_ren) begin
-                        axi_araddr <= {4'h6, fifo_q_addr[27:0]}; // 强制最高4位为6
+                        axi_araddr <= axi_mapped_addr;
                         axi_arvalid <= 1'b1; // 发起读地址请求
                     end else begin
                         axi_arvalid <= 1'b0;
@@ -308,7 +311,7 @@ module buffer(
             case (axi_state)
                 AXI_IDLE: begin
                     if (fifo_valid && !fifo_q_ren) begin
-                        axi_awaddr <= {4'h6, fifo_q_addr[27:0]}; // 强制最高4位为8
+                        axi_awaddr <= axi_mapped_addr;
                         axi_wdata <= fifo_q_wdata; // 直接从FIFO捕获数据
                         axi_wstrb <= fifo_q_wstrb; // 直接从FIFO捕获写使能
                         axi_awvalid <= 1'b1; // 发起写地址请求

@@ -13,8 +13,12 @@ module data_ram #(
 );
 
 reg [31:0] mem [0:3000];
+integer i;
 initial begin
-    $readmemh(MEM_HEX_PATH, mem);
+    for (i = 0; i < 3001; i = i + 1) begin
+        mem[i] = 32'b0; // 初始化内存为0
+    end
+    //$readmemh(MEM_HEX_PATH, mem);
 end
 always @ (posedge clk) begin
     if (|data_ram_wen) begin // 只要有一个写使能位被置位，就进行写操作
