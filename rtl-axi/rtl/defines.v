@@ -3,6 +3,9 @@
 `define ES_TO_MS_BUS_WD 123
 `define MS_TO_WS_BUS_WD 70
 
+//debug开关
+`define DEBUG_EN
+
 
 
 //IO口地址以及相关含义
@@ -40,4 +43,7 @@
 `define TIMER_CTRL 16'h0008 //定时器控制寄存器地址
 `define TIMER_INTCLR 16'h000C //定时器中断清除寄存器地址 写1清除中断
 `define TIMER_PRESCALER 16'h0010 //定时器预分频寄存器地址
+
+//LEDS地址以及相关含义
+`define LEDS_BASE_ADDR 16'h8003
 

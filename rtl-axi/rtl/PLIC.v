@@ -76,10 +76,10 @@ always @(*) begin
 end
 
 //CPU侧寄存器读写逻辑
+integer j;
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         //复位所有寄存器
-        integer j;
         for (j = 0; j < (`PLIC_PRIORITY_NUM/4); j = j + 1) begin
             priority_reg[j] <= 0;
         end

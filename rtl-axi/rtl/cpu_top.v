@@ -6,6 +6,7 @@ module cpu_top #(
 (
     input wire clk,
     input rst_n,
+    input wire clk_uart,
 `ifdef DEBUG_EN
     //debug接口
     output wire [31:0] debug_inst_pc,
@@ -15,6 +16,9 @@ module cpu_top #(
     output wire [31:0] debug_wb_rf_wdata,
     output wire [31:0] debug_data,
 `endif
+    //外设接口
+    input wire rx,
+    output wire tx,
     output reg [3:0] led
 );
 
@@ -35,6 +39,8 @@ wire        axi_wready;
 wire [1:0]  axi_bresp;
 wire        axi_bvalid;
 wire        axi_bready;
+wire plic_int;
+wire [15:0] plic_int_id;
 
 my_cpu #(
     .IF_MAX_CONSECUTIVE_GRANTS(IF_MAX_CONSECUTIVE_GRANTS)
@@ -65,7 +71,9 @@ my_cpu #(
     .axi_wready(axi_wready),
     .axi_bresp(axi_bresp),
     .axi_bvalid(axi_bvalid),
-    .axi_bready(axi_bready)
+    .axi_bready(axi_bready),
+    .plic_int(plic_int),
+    .plic_int_id(plic_int_id)
 );
 
 bridge #(
@@ -73,6 +81,7 @@ bridge #(
 ) u_bridge (
     .clk(clk),
     .rst_n(rst_n),
+    .clk_uart(clk_uart),
     .axi_araddr(axi_araddr),
     .axi_arvalid(axi_arvalid),
     .axi_arready(axi_arready),
@@ -90,7 +99,11 @@ bridge #(
     .axi_bresp(axi_bresp),
     .axi_bvalid(axi_bvalid),
     .axi_bready(axi_bready),
-    .led(led)
+    .led(led),
+    .rx(rx),
+    .tx(tx),
+    .plic_int(plic_int),
+    .plic_int_id(plic_int_id)
 );
 
 endmodule

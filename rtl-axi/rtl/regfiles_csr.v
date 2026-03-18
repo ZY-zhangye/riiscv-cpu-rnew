@@ -12,10 +12,7 @@ module regfiles_csr (
     input wire [5:0] exception_code,
     input wire [31:0] exception_mtval,
     output wire exception_flag,
-    output wire [31:0] exception_addr,
-    //中断相关信号
-    output wire timer_interrupt_flag,
-    input wire [4:0] interrupt_code
+    output wire [31:0] exception_addr
 );
 
 reg [31:0] mstatus;
@@ -31,7 +28,8 @@ reg [31:0] mvendorid;
 reg [31:0] marchid;
 reg [31:0] mimpid;
 reg [31:0] mscratch;
-wire mret_flag = & exception_code[3:0]; // mret指令的异常代码
+wire mret_flag = & exception_code[4:0]; // mret指令的异常代码
+wire plic_int_flag = exception_code == 6'b111111; // PLIC中断的异常代码
 reg prev_exception_flag;
 
 //CSR寄存器写操作
@@ -67,41 +65,17 @@ always @(posedge clk or negedge rst_n) begin
             12'hF13: mimpid <= csr_wdata;
             default: ; // do nothing
         endcase
+    end else if (plic_int_flag) begin
+        mepc <= csr_wdata; // 将引起中断的指令地址写入mepc
+        mcause <= {1'b1,15'b0, exception_mtval[15:0]}; // 将中断号放在mcause的低16位，高16位清零，并设置最高位表示是中断
     end else if (exception_code[5]) begin
         mepc <= csr_wdata; // 将引起异常的指令地址写入mepc
         mcause <= {27'b0, exception_code[4:0]}; // 将异常代码写入mcause
         mtval <= exception_mtval; // 将引起异常的地址或数据写入mtval
-    end else if (interrupt_code[4]) begin
-        //处理中断，类似于异常处理
-        mepc <= csr_wdata; // 将引起中断的指令地址写入mepc
-        mcause <= {1'b1,27'b0,interrupt_code[3:0]}; // 将中断代码写入mcause，最高位表示是中断
-        mip[interrupt_code[2:0]] <= 1'b1; // 设置对应的中断挂起位
     end else if (mret_flag) begin
         //mret指令，清除异常状态
         mstatus [3] <= mstatus[7]; // 恢复mstatus中MIE位的值
         mstatus [7] <= 1'b1; 
-    end
-end
-
-//定时器中断相关寄存器
-reg [31:0] timer_value;
-reg [31:0] timer_compare;
-reg timer_flag; // 定时器中断标志
-always @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-        timer_value <= 32'b0;
-        timer_compare <= 32'b0;
-    end else if (!prev_exception_flag) begin
-        timer_value <= timer_value + 1; // 模拟定时器计数
-        if (timer_value == timer_compare) begin
-            timer_flag <= mie[11] && mstatus[3]; // 当定时器比较值达到时，如果定时器中断使能且全局中断使能，则设置定时器中断标志
-        end else if (csr_we && csr_waddr == 12'h380) begin
-            timer_compare <= csr_wdata; // 写入定时器比较值
-            timer_flag <= 1'b0; // 重置定时器中断标志
-        end
-    end else begin
-        timer_flag <= 1'b0; // 异常发生时，重置定时器中断标志
-        timer_value <= 32'b0; // 异常发生时，重置定时器计数
     end
 end
 
@@ -131,7 +105,7 @@ end
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         prev_exception_flag <= 1'b0;
-    end else if (exception_code[5] || interrupt_code[3]) begin
+    end else if (exception_code[5]) begin
         prev_exception_flag <= 1'b1; // 记录异常发生
     end else if (mret_flag) begin
         prev_exception_flag <= 1'b0; // mret指令，清除异常标志
@@ -140,8 +114,7 @@ end
 wire mret_jmp_flag = mret_flag && prev_exception_flag; // 只有在之前发生过异常的情况下，mret指令才会跳转
 
 assign csr_rdata = csr_rdata_reg;
-assign exception_flag = exception_code[5] || mret_jmp_flag; // 发生异常或执行mret指令时，exception_flag为1
+assign exception_flag = exception_code[5] || mret_jmp_flag || plic_int_flag; // 发生异常或执行mret指令时，exception_flag为1
 assign exception_addr = mret_jmp_flag ? mepc : mtvec; // mret指令跳转到mepc，其他异常跳转到mtvec
-assign timer_interrupt_flag = timer_flag;
 
 endmodule

@@ -31,7 +31,10 @@ module my_cpu #(
     input  wire        axi_wready,
     input  wire [1:0]  axi_bresp,
     input  wire        axi_bvalid,
-    output wire        axi_bready
+    output wire        axi_bready,
+    //PLIC中断接口
+    input  wire        plic_int,
+    input  wire [15:0] plic_int_id
 );
 
 wire [31:0] imem_addr;
@@ -70,7 +73,10 @@ top u_top(
     .dmem_rdata(dmem_rdata),
     .dmem_rvalid(dmem_rvalid),
     .dmem_stall(dmem_stall),
-    .dmem_en(dmem_en)
+    .dmem_en(dmem_en),
+    .plic_int(plic_int),
+    .plic_int_id(plic_int_id)
+
 );
 
 // ============ IF AXI adapter ============

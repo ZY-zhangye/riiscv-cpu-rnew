@@ -250,8 +250,8 @@ assign br_taken = exe_jmp_flag
 assign br_target = exe_jmp_flag ? alu_jalr : alu_result;
 
 //访存信号
-assign data_sram_en = exe_mem_re;
-assign data_sram_wen = (exe_mem_we && es_allowin) ? 
+assign data_sram_en = exe_mem_re && ~(|exception_code_reg); // 仅在访存指令且无异常时使能数据SRAM
+assign data_sram_wen = (exe_mem_we && es_allowin && ~(|exception_code_reg)) ? 
                         ((exe_mem_size[0] && exe_mem_size[1]) ? (4'b0001 << mem_addr_low) : // 8位访存（字节次序反转）
                         (exe_mem_size[0] && !exe_mem_size[1]) ? (mem_addr_low[1] ? 4'b1100 : 4'b0011) : // 16位访存（低/高半字交换）
                         (!exe_mem_size[0]) ? 4'b1111 : // 32位访存

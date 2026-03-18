@@ -22,7 +22,10 @@ module top (
     input wire [31:0] dmem_rdata,
     output wire dmem_en,
     input wire dmem_stall,
-    input wire dmem_rvalid
+    input wire dmem_rvalid,
+    //PLIC中断接口
+    input wire plic_int,
+    input wire [15:0] plic_int_id
 );
 // IF 阶段
 wire fs_to_ds_valid;
@@ -79,8 +82,6 @@ wire [11:0] csr_addr;
 wire [31:0] csr_wdata;
 wire [5:0] exception_code;
 wire [31:0] exception_mtval;
-wire timer_interrupt_flag;
-wire [4:0] interrupt_code;
 wire [31:0] mem_result; // 从数据存储器前递的结果
 // WB 阶段
 wire rf_we;
@@ -156,7 +157,9 @@ id_stage u_id_stage (
     .exception_mtval_fd(exception_mtval_fd),
     .a(a), // 从寄存器文件读取的第一个操作数
     .b(b), // 从寄存器文件读取的第二个操作数
-    .op(op) // 传递操作码到乘法器模块
+    .op(op), // 传递操作码到乘法器模块
+    .plic_int(plic_int), // 传递中断信号到id阶段
+    .plic_int_id(plic_int_id) // 传递中断号到id阶段
 );
 
 exe_stage u_exe_stage (
@@ -225,8 +228,6 @@ mem_stage u_mem_stage (
     .exception_flag(exception_flag),
     .exception_code(exception_code),
     .exception_mtval(exception_mtval),
-    .timer_interrupt_flag(timer_interrupt_flag),
-    .interrupt_code(interrupt_code),
     .mul_result(mul_result), // 从单独乘法器模块接收计算结果
     .mem_result(mem_result) // 从数据存储器前递的结果
 );
@@ -273,9 +274,7 @@ regfiles_csr u_regfiles_csr (
     .exception_code(exception_code),
     .exception_mtval(exception_mtval),
     .exception_flag(exception_flag),
-    .exception_addr(exception_addr),
-    .timer_interrupt_flag(timer_interrupt_flag),
-    .interrupt_code(interrupt_code)
+    .exception_addr(exception_addr)
 );
 
 mult u_mult (

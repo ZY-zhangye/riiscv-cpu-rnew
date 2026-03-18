@@ -9,6 +9,7 @@ module bridge #(
 (
     input wire clk,
     input wire rst_n,
+    input wire clk_uart,
     //单套AXI4-Lite接口（用于与my_cpu连接）
     input wire [31:0] axi_araddr,
     input wire        axi_arvalid,
@@ -28,7 +29,12 @@ module bridge #(
     output wire       axi_bvalid,
     input wire        axi_bready,
     //外设接口（用于与外设连接）
-    output reg [3:0] led
+    output wire [3:0] led,
+    input wire rx,
+    output wire tx,
+    //PLIC中断信号
+    output wire plic_int,
+    output wire [15:0] plic_int_id
 );
 localparam INST_HIGH = 4'h0;
 localparam DATA_HIGH = 4'h6;
@@ -91,12 +97,17 @@ data_ram #(
 IO u_io (
     .clk(clk),
     .rst_n(rst_n),
+    .clk_uart(clk_uart),
     .addr(io_addr),
     .wdata(io_wdata),
     .wstrb(io_wen),
     .ren(io_ren),
     .rdata(io_rdata),
-    .led(led)
+    .led(led),
+    .rx(rx),
+    .tx(tx),
+    .plic_int(plic_int),
+    .plic_int_id(plic_int_id)
 );
 
 //定义AXI4-Lite读写状态机

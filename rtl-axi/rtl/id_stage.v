@@ -49,7 +49,10 @@ module id_stage (
     //单独的乘法模块接口（优化时序；结果输出值mem阶段，不阻挡后续指令）
     output wire [31:0] a,
     output wire [31:0] b,
-    output wire [3:0] op
+    output wire [3:0] op,
+    //中断采样接口（exe和mem阶段可能因为AXI访问等待而停顿，无法及时响应中断，因此在id阶段采样中断信号，并将中断相关信息传递到exe和mem阶段）
+    input wire plic_int,
+    input wire [15:0] plic_int_id
 );
 
 localparam nop = 32'h00000013; // addi x0, x0, 0
@@ -71,11 +74,15 @@ end
 reg [`FS_TO_DS_BUS_WD-1:0] if_id_bus_reg;
 reg [5:0] exception_code_reg;
 reg [31:0] exception_mtval_reg;
+reg plic_int_reg;
+reg [15:0] plic_int_id_reg;
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         if_id_bus_reg <= 0;
         exception_code_reg <= 0;
         exception_mtval_reg <= 0;
+        plic_int_reg <= 0;
+        plic_int_id_reg <= 0;
     end else if (ds_allowin && fs_to_ds_valid) begin
         if (br_jmp_flag || exception_flag) begin
             if_id_bus_reg <= {nop, if_id_bus_in[31:0]}; // 只保留PC，指令置为NOP
@@ -85,6 +92,8 @@ always @(posedge clk or negedge rst_n) begin
             if_id_bus_reg <= if_id_bus_in;
             exception_code_reg <= exception_code_fd;
             exception_mtval_reg <= exception_mtval_fd;
+            plic_int_reg <= plic_int;
+            plic_int_id_reg <= plic_int_id;
         end
     end
 end
@@ -351,11 +360,16 @@ assign id_exe_bus_out = {
 
 
 //异常相关输出
-assign exception_code_de = (inst_ecall && ds_allowin) ? 6'b101011 
+assign exception_code_de =  plic_int ? 6'b111111
+                            : (inst_ecall && ds_allowin) ? 6'b101011 
                             : (inst_ebreak && ds_allowin) ? 6'b100011
                             : (inst_mret && ds_allowin) ? 6'b011111
                             : exception_code_reg; 
-assign exception_mtval_de = exception_mtval_reg;
+assign exception_mtval_de = plic_int ? {16'b0, plic_int_id_reg} // 将中断号放在mtval的低16位，高16位清零
+                            : (inst_ecall && ds_allowin) ? 32'b0 
+                            : (inst_ebreak && ds_allowin) ? 32'b0
+                            : (inst_mret && ds_allowin) ? 32'b0
+                            : exception_mtval_reg;
 
 //单独的乘法模块接口
 assign a = rs1_data;
