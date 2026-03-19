@@ -71,10 +71,13 @@ always @(posedge clk or negedge rst_n) begin
     end else if (es_allowin && ds_to_es_valid) begin
         if (exception_flag || br_taken) begin
             ds_to_es_bus_r <= 0; // 发生异常时，EXE阶段输出NOP
+        end else begin
+            ds_to_es_bus_r <= id_exe_bus_in; // 正常传递控制与数据
+        end
+        if (exception_flag) begin
             exception_code_reg <= 0;
             exception_mtval_reg <= 0;
         end else begin
-            ds_to_es_bus_r <= id_exe_bus_in; // 正常传递控制与数据
             exception_code_reg <= exception_code_de;
             exception_mtval_reg <= exception_mtval_de;
         end
