@@ -157,7 +157,7 @@ always @(posedge clk or negedge rst_n) begin
 end
 
 // 读寄存器为组合逻辑，读 DATA 时返回当前 RX FIFO 头部字节。
-always @(*) begin
+always @(posedge clk or negedge rst_n) begin
     if (!re) begin
         rdata = 32'b0;
     end else begin

@@ -99,11 +99,31 @@ module IO(
     assign plic_wen = IO_PLIC && (|wstrb) && !ren; // PLIC写使能
     assign plic_ren = IO_PLIC && ren; // PLIC读使能
 
-    assign rdata = IO_UART ? uart_rdata :
-                   IO_TIMER ? timer_rdata :
-                   IO_LED ? led_rdata :
-                   IO_PLIC ? plic_rdata :
+
+    reg uart_ren_d; // 延迟一个时钟周期的UART读使能信号
+    reg timer_ren_d; // 延迟一个时钟周期的定时器读使能信号
+    reg led_ren_d; // 延迟一个时钟周期的LED读使能
+    reg plic_ren_d; // 延迟一个时钟周期的PLIC读使能信号
+    always @ (posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            uart_ren_d <= 0;
+            timer_ren_d <= 0;
+            led_ren_d <= 0;
+            plic_ren_d <= 0;
+        end else begin
+            uart_ren_d <= uart_ren;
+            timer_ren_d <= timer_ren;
+            led_ren_d <= led_ren;
+            plic_ren_d <= plic_ren;
+        end
+    end
+
+    assign rdata = uart_ren_d ? uart_rdata :
+                   timer_ren_d ? timer_rdata :
+                   led_ren_d ? led_rdata :
+                   plic_ren_d ? plic_rdata :
                    32'b0; // 默认读数据为0
+
 
     //实例化外设模块
     UART u_uart (

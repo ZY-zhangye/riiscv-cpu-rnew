@@ -1,4 +1,4 @@
-`define MEM_HEX_PATH "C:\\Users\\ZY\\Desktop\\riscv-cpu-rnew\\hex\\riscv-tests\\rv32-p-riscv.hex"
+`define MEM_HEX_PATH "C:\\Users\\ZY\\Desktop\\riscv-cpu-rnew\\hex\\uart.hex"
 // 加载内存文件
 /*# 定义【标准整数运算指令集】数组 - RV32I 基础指令全集
 UI_INSTS=(sw lw add addi sub and andi or ori xor xori 
@@ -30,7 +30,7 @@ end
 initial begin
     clk_uart = 0;
     rx = 1; // UART 接收线默认高电平
-    forever #100 clk_uart = ~clk_uart; // 115200 波特率时钟
+    forever #100 clk_uart = ~clk_uart; 
 end
 initial begin
     rst_n = 0;
@@ -66,7 +66,7 @@ initial begin
     $stop;
 end
 
-always @ (posedge clk) begin
+/*always @ (posedge clk) begin
     if (rst_n) begin
         $display("---------------------------------------------");
         $display("Time: %0t", $time);
@@ -77,6 +77,12 @@ always @ (posedge clk) begin
         $display("debug_wb_rf_wdata: %h", debug_wb_rf_wdata);
         $display("debug_data: %h", debug_data);
     end
+end*/
+
+always @ (posedge clk_uart) begin
+    $display("---------------------------------------------");
+    $display("Time: %0t", $time);
+    $display("tx: %b", tx);
 end
 
 /*always @ (posedge clk) begin

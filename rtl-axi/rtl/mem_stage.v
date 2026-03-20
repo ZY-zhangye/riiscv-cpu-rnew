@@ -90,7 +90,7 @@ assign {
     mem_csr_wdata       // [31:0] CSR写数据
 } = exe_mem_bus_r;
 
-assign load_req = (wb_sel == 3'b001); // 访存指令标志
+assign load_req = (wb_sel == 3'b001) && !flush_es && !flush_ms; // 访存指令标志
 assign mem_load_pending = ms_valid && load_req && !mem_data_valid;
 assign mem_load_rd = rd_out;
 

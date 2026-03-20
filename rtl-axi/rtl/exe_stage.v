@@ -140,7 +140,9 @@ assign {
 assign mem_req = exe_mem_we || exe_mem_re; // 访存请求信号，供EXE阶段内部使用
 
 // ALU操作数选择
-wire [31:0] real_rs1_data = exe_rs1_data;
+// 先做一次轻量预选择：若需要则从乘法结果旁路rs1，随后各功能组继续独立选择，
+// 保持“分组拆分”的时序优化目标，避免回退到全局大mux链。
+wire [31:0] real_rs1_data = exe_op1_sel[3] ? mult_result : exe_rs1_data;
 wire [31:0] real_rs2_data = exe_rs2_data;
 wire [31:0] op1_data;
 
@@ -166,8 +168,7 @@ wire [31:0] csr_src_op1 = exe_op1_sel[2] ? real_rs1_data :
                          exe_op1_sel[0] ? exe_imm : 32'b0;
 
 // 兼容现有后续逻辑保留的统一操作数（用于少量非关键路径逻辑）
-assign op1_data = exe_op1_sel[3] ? mult_result :
-                  exe_op1_sel[2] ? real_rs1_data :
+assign op1_data = exe_op1_sel[2] ? real_rs1_data :
                   exe_op1_sel[1] ? exe_pc :
                   exe_op1_sel[0] ? exe_imm : 32'b0;
 
@@ -201,12 +202,12 @@ wire [31:0] alu_slt = ($signed(cmp_src1) < $signed(cmp_src2)) ? 32'd1 : 32'd0;
 wire [31:0] alu_sltu = (cmp_src1 < cmp_src2) ? 32'd1 : 32'd0;
 wire [31:0] alu_jalr = (arith_src1 + arith_src2) & ~32'd1;
 wire [31:0] alu_copy1 = csr_src_old;
-wire [31:0] mem_addr = exe_rs1_data + exe_imm;
+wire [31:0] mem_addr = real_rs1_data + exe_imm;
 wire [1:0] mem_addr_low = mem_addr[1:0];
 // 专用分支比较单元：与ALU主路径独立，直接产生比较标志，消除与alu_result的串联
-wire cmp_eq   = (exe_rs1_data == exe_rs2_data);
-wire cmp_lt_s = ($signed(exe_rs1_data) < $signed(exe_rs2_data));
-wire cmp_lt_u = (exe_rs1_data < exe_rs2_data);
+wire cmp_eq   = (real_rs1_data == exe_rs2_data);
+wire cmp_lt_s = ($signed(real_rs1_data) < $signed(exe_rs2_data));
+wire cmp_lt_u = (real_rs1_data < exe_rs2_data);
 wire [31:0] alu_csrrc = csr_src_old & ~csr_src_op1;
 wire [31:0] alu_csrrs = csr_src_old | csr_src_op1;
 
