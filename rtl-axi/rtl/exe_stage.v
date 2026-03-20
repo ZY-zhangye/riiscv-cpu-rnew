@@ -63,28 +63,27 @@ end
 reg [`DS_TO_ES_BUS_WD-1:0] ds_to_es_bus_r;
 reg [5:0] exception_code_reg;
 reg [31:0] exception_mtval_reg;
+reg flush_es; // 标志: 当前指令需要被冲掉（异常或分支跳转）
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         ds_to_es_bus_r <= 0;
         exception_code_reg <= 0;
         exception_mtval_reg <= 0;
+        flush_es <= 1'b0;
     end else if (es_allowin && ds_to_es_valid) begin
-        if (exception_flag || br_taken) begin
-            ds_to_es_bus_r <= 0; // 发生异常时，EXE阶段输出NOP
-        end else begin
-            ds_to_es_bus_r <= id_exe_bus_in; // 正常传递控制与数据
-        end
+        ds_to_es_bus_r <= id_exe_bus_in; // 正常传递控制与数据
+        exception_code_reg <= exception_code_de;
+        exception_mtval_reg <= exception_mtval_de;
         if (exception_flag) begin
-            exception_code_reg <= 0;
-            exception_mtval_reg <= 0;
+            flush_es <= 1'b1; // 发生异常，标记当前指令需要被冲掉
         end else begin
-            exception_code_reg <= exception_code_de;
-            exception_mtval_reg <= exception_mtval_de;
+            flush_es <= 1'b0;
         end
     end
 end
 
 // 从打包总线中解包出的控制与数据信号
+wire flush_ds; // 来自ID阶段的指令冲掉标志
 wire [31:0] exe_pc;
 wire [31:0] exe_imm;
 wire [31:0] exe_rs1_data;
@@ -111,6 +110,7 @@ wire exe_mem_we;
 wire exe_mem_re;
 wire [2:0] exe_mem_size;
 assign {
+    flush_ds,        // 1-bit 来自ID阶段的指令冲掉标志
     exe_pc,
     exe_imm,
     exe_rs1_data,
@@ -243,18 +243,18 @@ always @(*) begin
 end
 
 // 分支判断：one-hot方式，每种分支直接与对应比较标志相与，去掉编码译码选择链
-assign br_taken = exe_jmp_flag
+assign br_taken = (exe_jmp_flag
                 | (exe_br_beq  & cmp_eq)
                 | (exe_br_bne  & (~cmp_eq))
                 | (exe_br_blt  & cmp_lt_s)
                 | (exe_br_bge  & (~cmp_lt_s))
                 | (exe_br_bltu & cmp_lt_u)
-                | (exe_br_bgeu & (~cmp_lt_u));
+                | (exe_br_bgeu & (~cmp_lt_u))) && !flush_ds && !flush_es; // 发生指令冲掉时，不执行分支跳转
 assign br_target = exe_jmp_flag ? alu_jalr : alu_result;
 
 //访存信号
-assign data_sram_en = exe_mem_re && ~(|exception_code_reg); // 仅在访存指令且无异常时使能数据SRAM
-assign data_sram_wen = (exe_mem_we && es_allowin && ~(|exception_code_reg)) ? 
+assign data_sram_en = exe_mem_re && ~(|exception_code_reg) && (!flush_es && !flush_ds); // 仅在访存指令且无异常时使能数据SRAM
+assign data_sram_wen = (exe_mem_we && es_allowin && ~(|exception_code_reg) && (!flush_es && !flush_ds)) ? 
                         ((exe_mem_size[0] && exe_mem_size[1]) ? (4'b0001 << mem_addr_low) : // 8位访存（字节次序反转）
                         (exe_mem_size[0] && !exe_mem_size[1]) ? (mem_addr_low[1] ? 4'b1100 : 4'b0011) : // 16位访存（低/高半字交换）
                         (!exe_mem_size[0]) ? 4'b1111 : // 32位访存
@@ -269,7 +269,7 @@ assign exe_to_mem_size = {mem_addr_low, exe_mem_size};
 //数据前递
 assign exe_id_data = alu_result;
 assign exe_id_waddr = exe_rd_addr;
-assign exe_id_we = exe_rd_wen;
+assign exe_id_we = exe_rd_wen && (!flush_es && !flush_ds); // 仅在目的寄存器写使能且无异常时，前递数据给ID阶段
 assign exe_load_valid = es_valid && exe_mem_re;
 
 //csr写数据
@@ -281,11 +281,12 @@ wire [31:0] exe_csr_wdata = (exe_csr_cmd == 4'b0001) ? op1_data : // CSRRW
                             (exe_csr_cmd == 4'b0111) ? alu_csrrc :
                         32'b0; // 其他情况写入0（如不涉及CSR操作的指令）
 assign exe_id_csr_wdata = exe_csr_wdata;
-assign exe_id_csr_we = exe_csr_we;
+assign exe_id_csr_we = exe_csr_we && (!flush_es && !flush_ds); // 仅在CSR写使能且无异常时，前递CSR写数据给ID阶段
 assign exe_id_csr_addr = exe_csr_addr;
 
 // 输出到访存阶段的总线打包
 assign exe_mem_bus_out = {
+    (flush_es || flush_ds),
     exe_to_mem_size, // [4:0] 送往访存阶段的访存大小和地址偏移信息
     exe_pc,         // [31:0] 当前指令地址
     alu_result,     // [31:0] ALU计算结果
@@ -303,7 +304,8 @@ wire exception_lam = ((!exe_mem_size[0] && mem_addr_low != 2'b00 && exe_mem_re) 
                     (exe_mem_size[0] && !exe_mem_size[1] && mem_addr_low[0] != 1'b0 && exe_mem_re)); // 32位访存时，地址必须为4字节对齐;16位访存时，地址必须为2字节对齐
 wire exception_sam = (exe_mem_we && !exe_mem_size[0] && mem_addr_low != 2'b00) || (exe_mem_we && exe_mem_size[0] && !exe_mem_size[1] && mem_addr_low[0] != 1'b0); // 8位访存时，地址必须为4字节对齐;16位访存时，地址必须为2字节对齐
 // EXE只负责异常检测与候选值产生，最终异常编码/mtval选择在MEM阶段完成
-assign exception_code_em = exception_code_reg;
+assign exception_code_em = (exception_code_reg == 6'b111111) ? 6'b111111 :
+                            (!flush_es && !flush_ds) ? exception_code_reg : 6'b0; // 冲刷时不输出异常
 assign exception_mtval_em = exception_mtval_reg;
 assign exception_iam_em = exception_iam;
 assign exception_lam_em = exception_lam;

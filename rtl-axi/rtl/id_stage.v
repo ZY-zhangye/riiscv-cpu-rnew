@@ -76,20 +76,20 @@ reg [5:0] exception_code_reg;
 reg [31:0] exception_mtval_reg;
 reg plic_int_reg;
 reg [15:0] plic_int_id_reg;
+reg flush_ds; // 标志: 当前指令需要被冲掉（异常或分支跳转）
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         if_id_bus_reg <= 0;
         exception_code_reg <= 0;
         exception_mtval_reg <= 0;
     end else if (ds_allowin && fs_to_ds_valid) begin
-        if (br_jmp_flag || exception_flag) begin
-            if_id_bus_reg <= {nop, if_id_bus_in[31:0]}; // 只保留PC，指令置为NOP
-            exception_code_reg <= 0;
-            exception_mtval_reg <= 0;
+        if_id_bus_reg <= if_id_bus_in;
+        exception_code_reg <= exception_code_fd;
+        exception_mtval_reg <= exception_mtval_fd;
+        if (exception_flag || br_jmp_flag) begin
+            flush_ds <= 1'b1; // 发生异常或分支跳转，标记当前指令需要被冲掉
         end else begin
-            if_id_bus_reg <= if_id_bus_in;
-            exception_code_reg <= exception_code_fd;
-            exception_mtval_reg <= exception_mtval_fd;
+            flush_ds <= 1'b0;
         end
     end
 end
@@ -347,6 +347,7 @@ assign mem_size [2] = inst_lb || inst_lh; // 符号扩展
 
 //总线打包
 assign id_exe_bus_out = {
+    flush_ds,
     id_pc,         // [31:0] 指令地址
     imm,        // [31:0] 立即数
     rs1_data,   // [31:0] rs1_data
@@ -369,6 +370,7 @@ assign id_exe_bus_out = {
 
 //异常相关输出
 assign exception_code_de =  plic_int_reg ? 6'b111111
+                            : flush_ds ? 6'b0
                             : (inst_ecall && ds_allowin) ? 6'b101011 
                             : (inst_ebreak && ds_allowin) ? 6'b100011
                             : (inst_mret && ds_allowin) ? 6'b011111

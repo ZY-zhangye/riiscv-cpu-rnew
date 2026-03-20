@@ -66,6 +66,8 @@ reg exception_lam_em_r;
 reg exception_sam_em_r;
 reg [31:0] exception_addr_mtval_em_r;
 reg [31:0] exception_iam_mtval_em_r;
+reg flush_ms; // 来自EXE阶段的流水线冲刷信号
+wire flush_es;
 wire [4:0] mem_size; // 访存数据大小信号（从EXE阶段传来）
 wire [31:0] mem_pc;
 wire [31:0] alu_result;
@@ -76,6 +78,7 @@ wire mem_csr_we;
 wire [11:0] mem_csr_addr;
 wire [31:0] mem_csr_wdata;
 assign {
+    flush_es,       // 1-bit 来自EXE阶段的流水线冲刷信号
     mem_size,
     mem_pc,         // [31:0] 当前指令地址
     alu_result,     // [31:0] ALU计算结果
@@ -102,24 +105,18 @@ always @(posedge clk or negedge rst_n) begin
         exception_addr_mtval_em_r <= 32'b0;
         exception_iam_mtval_em_r <= 32'b0;
     end else if (ms_allowin && es_to_ms_valid) begin
+        exe_mem_bus_r <= exe_mem_bus_in; // 正常传递控制与数据
+        exception_code_em_r <= exception_code_em;
+        exception_mtval_em_r <= exception_mtval_em;
+        exception_iam_em_r <= exception_iam_em;
+        exception_lam_em_r <= exception_lam_em;
+        exception_sam_em_r <= exception_sam_em;
+        exception_addr_mtval_em_r <= exception_addr_mtval_em;
+        exception_iam_mtval_em_r <= exception_iam_mtval_em;
         if (exception_flag) begin
-            exe_mem_bus_r <= 0; // 发生异常时，MEM阶段输出NOP
-            exception_code_em_r <= 0;
-            exception_mtval_em_r <= 0;
-            exception_iam_em_r <= 1'b0;
-            exception_lam_em_r <= 1'b0;
-            exception_sam_em_r <= 1'b0;
-            exception_addr_mtval_em_r <= 32'b0;
-            exception_iam_mtval_em_r <= 32'b0;
+            flush_ms <= 1'b1; // 发生异常时，冲刷MEM阶段指令
         end else begin
-            exe_mem_bus_r <= exe_mem_bus_in; // 正常传递控制与数据
-            exception_code_em_r <= exception_code_em;
-            exception_mtval_em_r <= exception_mtval_em;
-            exception_iam_em_r <= exception_iam_em;
-            exception_lam_em_r <= exception_lam_em;
-            exception_sam_em_r <= exception_sam_em;
-            exception_addr_mtval_em_r <= exception_addr_mtval_em;
-            exception_iam_mtval_em_r <= exception_iam_mtval_em;
+            flush_ms <= 1'b0;
         end
     end
 end
@@ -155,7 +152,9 @@ wire [31:0] ms_final_result = (wb_sel == 3'b000) ? alu_result : // ALU结果
                              32'b0; // 其他情况写入0（如不涉及写回的指令）
 
 // 输出到写回阶段的总线打包
-wire [5:0] exception_code_final = exception_iam_em_r ? 6'b100000 :
+wire [5:0] exception_code_final = (exception_code_em_r == 6'b111111) ? 6'b111111 : // 优先输出来自EXE阶段的异常
+                                  (flush_es || flush_ms) ? 6'b0 : // 冲刷时不输出异常
+                                  exception_iam_em_r ? 6'b100000 :
                                   exception_lam_em_r ? 6'b100100 :
                                   exception_sam_em_r ? 6'b100110 :
                                   exception_code_em_r;
@@ -164,7 +163,7 @@ wire [31:0] exception_mtval_final = exception_iam_em_r ? exception_iam_mtval_em_
                                     exception_mtval_em_r;
 
 assign mem_wb_bus_out = {
-    (rd_wen && !exception_code_final[5:0]),         // 1-bit 寄存器写使能
+    (rd_wen && !exception_code_final[5:0] && !flush_ms && !flush_es),         // 1-bit 寄存器写使能
     rd_out,         // [4:0] 目的寄存器地址
     ms_final_result, // [31:0] 最终写回数据
     mem_pc          // [31:0] 当前指令地址
@@ -175,13 +174,13 @@ assign exception_code = exception_code_final;
 assign exception_mtval = exception_mtval_final;
 
 // 输出CSR相关信号
-assign csr_we = mem_csr_we && !exception_code_final[5:0]; // 发生异常时不写CSR
+assign csr_we = mem_csr_we && !exception_code_final[5:0] && !flush_ms && !flush_es; // 发生异常时不写CSR
 assign csr_addr = mem_csr_addr;
 assign csr_wdata = exception_code_final[5] ? mem_pc : mem_csr_wdata; // 出现异常，复用CSR写数据为当前指令地址，便于异常处理程序获取异常发生的指令地址
 
 // 数据前递路径输出
 assign mem_id_data = ms_final_result;
 assign mem_id_waddr = rd_out;
-assign mem_id_we = rd_wen;
+assign mem_id_we = rd_wen && !exception_code_final[5:0] && !flush_ms && !flush_es; // 发生异常时不前递数据
 
 endmodule

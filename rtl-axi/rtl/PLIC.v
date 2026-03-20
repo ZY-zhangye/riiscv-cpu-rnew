@@ -87,6 +87,7 @@ always @(posedge clk or negedge rst_n) begin
         enable_reg <= 0;
         threshold_reg <= 0;
         claim_reg <= 0;
+        cpu_rdata <= 0;
     end else begin
         if (cpu_ren) begin
             //读寄存器逻辑
@@ -101,7 +102,9 @@ always @(posedge clk or negedge rst_n) begin
                 `PLIC_CLAIM_OFFSET: cpu_rdata <= {16'b0, claim_reg};
                 default: cpu_rdata <= 32'b0; //未定义地址返回0
             endcase
-        end 
+        end else if (plic_int) begin
+            claim_reg <= plic_int_id; //有新的中断请求，更新claim寄存器为当前处理中断号
+        end
         if (cpu_wen) begin
             //写寄存器逻辑
             case (cpu_addr)

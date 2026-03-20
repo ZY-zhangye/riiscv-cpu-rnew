@@ -16,11 +16,12 @@ reg [31:0] timer_ctrl;
 reg [31:0] timer_intclr;
 reg [31:0] timer_prescaler;
 reg [31:0] prescaler_count;
+reg [31:0] timer_value_reg;
 
 wire timer_enable = timer_ctrl[0];
 wire timer_int_enable = timer_ctrl[1];
 wire timer_mode = timer_ctrl[2]; // 0: one-shot, 1: periodic
-wire timer_reload = timer_ctrl[3]; // 0: no reload, 1: reload on timeout
+wire timer_reload = timer_ctrl[3]; // 0: no reload, 1: reload on timeout(仅周期模式有效)
 wire timer_prescaler_enable = timer_ctrl[4]; // 0: no prescaler, 1: use prescaler
 
 //分频逻辑
@@ -39,42 +40,54 @@ always @(posedge clk or negedge rst_n) begin
 end
 wire timer_tick = (prescaler_count == timer_prescaler) && timer_enable;
 wire timer_clk = timer_prescaler_enable ? timer_tick : clk;
+wire timer_timeout = (timer_value == 0) && timer_enable && (timer_value_reg == 1);
 
 //定时器计数逻辑
+reg periodic_wait_intclr;
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         timer_value <= 0;
+        periodic_wait_intclr <= 0;
     end else if (we && addr == `TIMER_LOAD) begin
         timer_value <= wdata; // 写入装载值
+    end else if (we && addr == `TIMER_INTCLR) begin
+        if (timer_mode && timer_reload && periodic_wait_intclr) begin
+            timer_value <= timer_load; // 周期模式：清中断后才开始下一次计数
+            periodic_wait_intclr <= 0;
+        end
+    end else if (we && addr == `TIMER_CTRL) begin
+        periodic_wait_intclr <= 0;
     end else if (timer_clk && timer_enable) begin
         if (timer_value > 0) begin
             timer_value <= timer_value - 1;
         end else if (timer_value == 0) begin
             if (timer_mode && timer_reload) begin
-                timer_value <= timer_load; // 周期模式且需要重载，重新装载计数器
+                // 周期模式：等待软件清中断，不自动重载
+                if (timer_timeout && timer_int_enable) begin
+                    periodic_wait_intclr <= 1;
+                end
             end
         end
     end
 end
 //中断逻辑
-reg [31:0] timer_value_reg;
 always @ (posedge clk or negedge rst_n) begin
   if (!rst_n) begin
     timer_value_reg <= 0;
-  end else begin
+  end else if (timer_clk && timer_enable) begin
     timer_value_reg <= timer_value;
   end
 end
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         timer_int <= 0;
-    end else if (timer_value == 0 && timer_enable && timer_value_reg == 1) begin
+    end else if (timer_timeout) begin
         if (timer_int_enable) begin
             timer_int <= 1; // 计数器到0且定时器使能，触发中断
         end
     end else if (we && addr == `TIMER_INTCLR) begin
         timer_int <= 0; // 写1清除中断
-    end else if (we && addr == `TIMER_INTCLR) begin
+    end else if (we && addr == `TIMER_CTRL) begin
         timer_int <= 0; // 修改控制寄存器时清除中断
     end
 end
