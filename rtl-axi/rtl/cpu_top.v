@@ -1,7 +1,7 @@
 `include "defines.v"
 module cpu_top #(
-    parameter IF_MAX_CONSECUTIVE_GRANTS = 8,
-    parameter MEM_HEX_PATH = "C:\\Users\\ZY\\Desktop\\riiscv-cpu-rnew\\hex\\riscv-tests\\rv32ui-p-lui.hex"
+    parameter IF_MAX_CONSECUTIVE_GRANTS = 8
+    //parameter MEM_HEX_PATH = "C:\\Users\\ZY\\Desktop\\riiscv-cpu-rnew\\hex\\riscv-tests\\rv32ui-p-lui.hex"
 )
 (
     input wire clk,
@@ -19,7 +19,7 @@ module cpu_top #(
     //外设接口
     input wire rx,
     output wire tx,
-    output reg [3:0] led
+    output wire [3:0] led
 );
 
 wire [31:0] axi_araddr;
@@ -77,7 +77,7 @@ my_cpu #(
 );
 
 bridge #(
-    .MEM_HEX_PATH(MEM_HEX_PATH)
+    //.MEM_HEX_PATH(MEM_HEX_PATH)
 ) u_bridge (
     .clk(clk),
     .rst_n(rst_n),

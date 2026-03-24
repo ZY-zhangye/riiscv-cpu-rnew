@@ -71,7 +71,7 @@ wire [31:0] io_rdata;
 reg io_ren;
 
 inst_ram #(
-    .MEM_HEX_PATH(MEM_HEX_PATH)
+    //.MEM_HEX_PATH(MEM_HEX_PATH)
 ) u_inst_ram (
     .clk(clk),
     .rst_n(rst_n),
@@ -83,7 +83,7 @@ inst_ram #(
 );
 
 data_ram #(
-    .MEM_HEX_PATH(MEM_HEX_PATH)
+    //.MEM_HEX_PATH(MEM_HEX_PATH)
 ) u_data_ram (
     .clk(clk),
     .rst_n(rst_n),

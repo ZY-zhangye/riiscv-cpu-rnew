@@ -95,6 +95,9 @@ wire tx_pop;
 wire rx_pop;
 wire rx_push;
 
+reg re_reg; // 读使能信号寄存器，确保地址稳定
+reg [31:0] uart_addr;
+
 // 暂未实现奇偶校验，相关状态位固定为 0。
 assign parity_error = 1'b0;
 // CTRL[4:0] = {boundary_on, uart_rst, uart_en, tx_int_en, rx_int_en}。
@@ -115,7 +118,7 @@ assign write_data_req = we && (addr == `UART_RT_DATA);
 assign write_status_req = we && (addr == `UART_RT_STATUS);
 assign write_ctrl_req = we && (addr == `UART_RT_CTRL);
 assign write_baud_req = we && (addr == `UART_RT_BAUD);
-assign read_data_req = re && (addr == `UART_RT_DATA);
+assign read_data_req = re_reg && (uart_addr == `UART_RT_DATA);
 // CTRL 写入时，uart_rst 作为软件复位脉冲使用，只在本次写入周期生效。
 assign soft_reset_req = write_ctrl_req && wdata[3];
 
@@ -158,10 +161,21 @@ end
 
 // 读寄存器为组合逻辑，读 DATA 时返回当前 RX FIFO 头部字节。
 always @(posedge clk or negedge rst_n) begin
-    if (!re) begin
-        rdata = 32'b0;
+    if (!rst_n) begin
+        uart_addr <= 16'b0;
+        re_reg <= 1'b0;
+    end else if (re) begin
+        uart_addr <= addr;
+        re_reg <= 1'b1;
     end else begin
-        case (addr)
+        re_reg <= 1'b0;
+    end
+end
+always @(*) begin
+    if (!rst_n) begin
+        rdata = 32'b0;
+    end else if (re_reg) begin
+        case (uart_addr)
             `UART_RT_DATA: begin
                 if (rx_count != 0) begin
                     rdata = {24'b0, rx_buffer[rx_head]};

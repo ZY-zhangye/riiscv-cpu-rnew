@@ -20,7 +20,7 @@ module IO(
     wire [31:0] uart_rdata;
 
     wire timer_wen;
-    reg timer_ren;
+    wire timer_ren;
     wire [31:0] timer_rdata;
 
     wire led_wen;
@@ -133,7 +133,7 @@ module IO(
         .addr(io_addr), // 16字节对齐
         .wdata(wdata),
         .we(uart_wen),
-        .re(uart_ren),
+        .re(uart_ren), // 读使能信号在IO模块中延迟一个时钟周期
         .rdata(uart_rdata),
         .rx(rx),
         .tx(tx),

@@ -1,5 +1,5 @@
 module data_ram #(
-    parameter MEM_HEX_PATH = "C:\\Users\\ZY\\Desktop\\riiscv-cpu-rnew\\hex\\riscv-tests\\rv32ui-p-lui.hex"
+    parameter MEM_HEX_PATH = "C:\\Users\\ZY\\Desktop\\riscv-cpu-rnew\\hex\\data_ram.hex"
 )
  (
     input wire clk,
@@ -46,7 +46,7 @@ always @ (posedge clk) begin
         end else begin
             data_ram_rdata <= mem[mem_addr]; // 按字对齐访问
         end
-        $display("Data Read: Addr=%08h Data=%08h", data_ram_addr, mem[mem_addr]);
+        // $display("Data Read: Addr=%08h Data=%08h", data_ram_addr, mem[mem_addr]);
     end else begin
         data_ram_rdata <= 32'b0; // 不读时输出0
     end
