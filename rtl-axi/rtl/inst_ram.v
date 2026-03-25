@@ -1,5 +1,5 @@
 module inst_ram #(
-    parameter MEM_HEX_PATH = "C:\\Users\\ZY\\Desktop\\riscv-cpu-rnew\\hex\\uart.hex"
+    parameter MEM_HEX_PATH = "C:\\Users\\ZY\\Desktop\\riscv-cpu-rnew\\hex\\riscv-tests\\rv32-p-riscv.hex"
 )
 (
     input wire clk,

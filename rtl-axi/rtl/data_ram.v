@@ -1,5 +1,5 @@
 module data_ram #(
-    parameter MEM_HEX_PATH = "C:\\Users\\ZY\\Desktop\\riscv-cpu-rnew\\hex\\data_ram.hex"
+    parameter MEM_HEX_PATH = "C:\\Users\\ZY\\Desktop\\riscv-cpu-rnew\\hex\\riscv-tests\\rv32-p-riscv.hex"
 )
  (
     input wire clk,

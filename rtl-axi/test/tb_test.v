@@ -94,7 +94,7 @@ cpu_top #(
 
 );
 
-// 监视 DUT 的 tx，按 115200 波特率解码。
+/*// 监视 DUT 的 tx，按 115200 波特率解码。
 uart_rx_monitor #(
     .BAUD_RATE(UART_BAUD_RATE)
 ) u_uart_rx_monitor (
@@ -135,9 +135,9 @@ initial begin
     $display("----------------------------------------------");
     $display("Simulation timeout.");
     $stop;
-end
+end*/
 
-/*always @ (posedge clk) begin
+always @ (posedge clk) begin
     if (rst_n) begin
         $display("---------------------------------------------");
         $display("Time: %0t", $time);
@@ -148,15 +148,15 @@ end
         $display("debug_wb_rf_wdata: %h", debug_wb_rf_wdata);
         $display("debug_data: %h", debug_data);
     end
-end*/
+end
 
-/*always @ (posedge clk_uart) begin
+always @ (posedge clk_uart) begin
     $display("---------------------------------------------");
     $display("Time: %0t", $time);
     $display("tx: %b", tx);
-end*/
+end
 
-/*always @ (posedge clk) begin
+always @ (posedge clk) begin
     if (rst_n) begin
         if (debug_wb_pc == 32'h00000044) begin
                 $display("---------------------------------------------");
@@ -172,7 +172,7 @@ end*/
             $stop;
         end
     end
-end*/
+end
 
 endmodule
 
