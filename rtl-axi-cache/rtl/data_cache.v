@@ -45,6 +45,7 @@ module data_cache (
     reg [31:0] req_addr;     // 当前在途请求地址（LOOKUP使用）
     reg [31:0] miss_addr;    // MISS回填地址
     reg [31:0] miss_wdata;   // MISS回填数据（写未命中时使用）
+    reg [3:0] miss_wstrb;    // MISS回填写使能（写未命中时使用）
     reg [31:0] req_wdata;     // 当前在途写数据（WRITEUP使用）
     reg [3:0] req_wstrb;     // 当前在途写使能（WRITEUP使用）
     integer i;
@@ -55,6 +56,20 @@ module data_cache (
     wire [6:0] miss_index = miss_addr[11:5];
     wire [2:0] miss_offset = miss_addr[4:2];
     wire [19:0] miss_tag = miss_addr[31:12];
+
+    // 按wstrb进行单字节合并（用于写未命中回填时的部分字节更新）
+    function [31:0] merge_word_by_strb;
+        input [31:0] old_word;
+        input [31:0] new_word;
+        input [3:0]  strb;
+        begin
+            merge_word_by_strb = old_word;
+            if (strb[0]) merge_word_by_strb[7:0]   = new_word[7:0];
+            if (strb[1]) merge_word_by_strb[15:8]  = new_word[15:8];
+            if (strb[2]) merge_word_by_strb[23:16] = new_word[23:16];
+            if (strb[3]) merge_word_by_strb[31:24] = new_word[31:24];
+        end
+    endfunction
 
     assign index = (state == IDLE) ? addr[11:5] :
                    (state == MISS) ? ((refill_valid && ren) ? addr[11:5] : miss_index) :
@@ -188,6 +203,7 @@ module data_cache (
             miss_addr <= 32'b0;
             miss_state <= 0;
             miss_wdata <= 32'b0;
+            miss_wstrb <= 4'b0;
             for (i = 0; i < 128; i = i + 1) begin
                 lru[i] <= 2'b00;
             end
@@ -219,7 +235,8 @@ module data_cache (
             // WRITEUP未命中，锁存MISS地址
             if (state == WRITEUP && !any_hit) begin
                 miss_addr <= req_addr;
-                miss_wdata <= wdata;
+                miss_wdata <= req_wdata;
+                miss_wstrb <= req_wstrb;
                 miss_state <= 1'b1;
             end
 
@@ -257,8 +274,6 @@ module data_cache (
     end
 
     //Dcache读数据输出和重填请求逻辑（在这里只处理读请求，后续处理写请求）
-    wire [255:0] test_data = cache_data_out[0];
-    wire [31:0] test_word = cache_data_out[0][req_offset*32 +: 32];
     always @(*) begin
         case (state)
             IDLE: begin
@@ -286,6 +301,18 @@ module data_cache (
                     refill_addr = {req_addr[31:5], 5'b00000}; // 按块地址对齐
                 end
             end
+            WRITEUP: begin
+                rdata = 32'b0;
+                rvalid = 1'b0;
+                if (!any_hit) begin
+                    // 写未命中：按协议仅在本拍发起一次回填请求
+                    refill_req = 1'b1;
+                    refill_addr = {req_addr[31:5], 5'b00000};
+                end else begin
+                    refill_req = 1'b0;
+                    refill_addr = 32'b0;
+                end
+            end
             MISS: begin
                 if (refill_valid) begin
                     rdata = refill_data[miss_offset*32 +: 32];
@@ -308,55 +335,7 @@ module data_cache (
         endcase
     end
 
-    //Dcache写数据逻辑
-    always @(*) begin
-        case (state)
-            IDLE: begin
-                byte_wen = 32'b0;
-            end
-            WRITEUP: begin
-                if (any_hit) begin
-                    case (hit_way)
-                        4'b0001: begin
-                            cache_data_in = {req_wdata,req_wdata,req_wdata,req_wdata,req_wdata,req_wdata,req_wdata,req_wdata}; // 写未命中时需要先读出原数据再写回，因此这里直接用写数据覆盖，实际写入时会根据byte_wen进行部分更新
-                            cache_data_wen[0] = 1'b1;
-                            cache_tag_wen[0] = 1'b1;
-                            byte_wen = req_wstrb << (req_offset * 4); // 根据偏移量计算字节使能
-                        end
-                        4'b0010: begin
-                            cache_data_in = {req_wdata,req_wdata,req_wdata,req_wdata,req_wdata,req_wdata,req_wdata,req_wdata};
-                            cache_data_wen[1] = 1'b1;
-                            cache_tag_wen[1] = 1'b1;
-                            byte_wen = req_wstrb << (req_offset * 4); // 根据偏移量计算字节使能
-                        end
-                        4'b0100: begin
-                            cache_data_in = {req_wdata,req_wdata,req_wdata,req_wdata,req_wdata,req_wdata,req_wdata,req_wdata};
-                            cache_data_wen[2] = 1'b1;
-                            cache_tag_wen[2] = 1'b1;
-                            byte_wen = req_wstrb << (req_offset * 4); // 根据偏移量计算字节使能
-                        end
-                        4'b1000: begin
-                            cache_data_in = {req_wdata,req_wdata,req_wdata,req_wdata,req_wdata,req_wdata,req_wdata,req_wdata};
-                            cache_data_wen[3] = 1'b1;
-                            cache_tag_wen[3] = 1'b1;
-                            byte_wen = req_wstrb << (req_offset * 4); // 根据偏移量计算字节使能
-                        end
-                    endcase
-                    cache_tag_in = {1'b1, 1'b1, req_tag}; // 写操作有效，脏位置1
-                end else begin
-                    byte_wen = 32'b0;
-                end
-            end
-            LOOKUP, MISS: begin
-                byte_wen = 32'b0;
-            end
-            default: begin
-                byte_wen = 32'b0;
-            end
-            endcase
-    end
-
-    // Dcache的数据重填和标签更新以及脏位替换逻辑
+    // Dcache写命中 + 回填更新 + 脏位写回（合并到一个组合逻辑块，避免多驱动）
     always @ (*) begin
         cache_data_in = 256'b0;
         cache_tag_in = 22'b0;
@@ -369,22 +348,44 @@ module data_cache (
         cache_tag_wen[1] = 1'b0;
         cache_tag_wen[2] = 1'b0;
         cache_tag_wen[3] = 1'b0;
+        write_back_req = 1'b0;
+        write_back_addr = 32'b0;
+        write_back_data = 256'b0;
+
+        // 写命中更新逻辑（WRITEUP状态）
+        if (state == WRITEUP && any_hit) begin
+            cache_data_in = {req_wdata,req_wdata,req_wdata,req_wdata,req_wdata,req_wdata,req_wdata,req_wdata};
+            cache_tag_in = {1'b1, 1'b1, req_tag}; // 写命中：有效位=1，脏位=1
+            byte_wen = req_wstrb << (req_offset * 4);
+            case (hit_way)
+                4'b0001: begin
+                    cache_data_wen[0] = 1'b1;
+                    cache_tag_wen[0] = 1'b1;
+                end
+                4'b0010: begin
+                    cache_data_wen[1] = 1'b1;
+                    cache_tag_wen[1] = 1'b1;
+                end
+                4'b0100: begin
+                    cache_data_wen[2] = 1'b1;
+                    cache_tag_wen[2] = 1'b1;
+                end
+                4'b1000: begin
+                    cache_data_wen[3] = 1'b1;
+                    cache_tag_wen[3] = 1'b1;
+                end
+                default: begin
+                    byte_wen = 32'b0;
+                end
+            endcase
+        end
 
         //数据重填和标签更新逻辑
         if (state == MISS && refill_valid) begin
             if (miss_state) begin //当miss为写未命中时需要将写的数据替换进去
                 cache_data_in = refill_data;
-                case (miss_offset)
-                    3'b000: cache_data_in[31:0] = miss_wdata;
-                    3'b001: cache_data_in[63:32] = miss_wdata;
-                    3'b010: cache_data_in[95:64] = miss_wdata;
-                    3'b011: cache_data_in[127:96] = miss_wdata;
-                    3'b100: cache_data_in[159:128] = miss_wdata;
-                    3'b101: cache_data_in[191:160] = miss_wdata;
-                    3'b110: cache_data_in[223:192] = miss_wdata;
-                    3'b111: cache_data_in[255:224] = miss_wdata;
-                    default: cache_data_in = refill_data;
-                endcase
+                cache_data_in[miss_offset*32 +: 32] =
+                    merge_word_by_strb(refill_data[miss_offset*32 +: 32], miss_wdata, miss_wstrb);
             end else begin
                 cache_data_in = refill_data;
             end

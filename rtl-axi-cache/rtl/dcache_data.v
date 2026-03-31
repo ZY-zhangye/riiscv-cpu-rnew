@@ -21,10 +21,10 @@ module dcache_data(
             // 复位时清空缓存数据
             data_clean();
         end else if (write_en) begin
-            // 写入数据到缓存，支持按字节写入
-            for (j = 0; j < 8; j = j + 1) begin
+            // 写入数据到缓存，支持按字节写入（byte_en[31:0] 每一位控制1个字节）
+            for (j = 0; j < 32; j = j + 1) begin
                 if (byte_en[j]) begin
-                    cache_data[index][j*32 +: 32] <= data_in[j*32 +: 32];
+                    cache_data[index][j*8 +: 8] <= data_in[j*8 +: 8];
                 end
             end
         end else begin
