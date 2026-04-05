@@ -133,25 +133,19 @@ module dcache (
         end
     end
     //IO访问直接通过AXI总线发出
-    reg [31:0] io_addr;
-    reg io_ren;
+    reg pending_io_read;
+    reg [31:0] pending_io_addr;
     reg [3:0] io_wen;
     reg [31:0] io_wdata;
     reg r_req_is_refill; // 当前在途读事务类型：1=refill，0=IO读
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            io_addr <= 0;
-            io_ren <= 0;
+            pending_io_read <= 0;
+            pending_io_addr <= 0;
             io_wen <= 0;
             io_wdata <= 0;
             r_req_is_refill <= 0;
         end else begin
-            // 仅在IO读请求到来时锁存读地址，避免被并行IO写覆盖
-            if (is_io_access && cpu_ren) begin
-                io_addr <= cpu_addr;
-                io_ren <= 1'b1;
-            end
-
             // 锁存IO写请求信息（调试/观测用途）
             if (is_io_access && (|cpu_wen)) begin
                 io_wen <= cpu_wen;
@@ -162,8 +156,14 @@ module dcache (
             if (r_state == R_SEND && axi_arvalid && axi_arready) begin
                 r_req_is_refill <= pending_refill;
                 if (!pending_refill) begin
-                    io_ren <= 1'b0;
+                    pending_io_read <= 1'b0;
                 end
+            end
+
+            // 采样IO读请求（单拍脉冲），忙时挂起，等待读状态机空闲后发出
+            if (is_io_access && cpu_ren) begin
+                pending_io_read <= 1'b1;
+                pending_io_addr <= cpu_addr;
             end
 
             if (r_state == R_IDLE) begin
@@ -339,9 +339,9 @@ module dcache (
     always @ (*) begin
         case (r_state)
             R_IDLE: begin
-                if (refill_req && !pending_refill) begin
+                if (pending_refill) begin
                     r_state_next = R_SEND;
-                end else if (is_io_access && cpu_ren) begin
+                end else if (pending_io_read) begin
                     r_state_next = R_SEND;
                 end else begin
                     r_state_next = R_IDLE;
@@ -355,7 +355,9 @@ module dcache (
                 end
             end
             R_WAIT: begin
-                if (axi_rvalid) begin
+                if (axi_rvalid && axi_rlast) begin
+                    r_state_next = R_IDLE;
+                end else if (axi_rvalid) begin
                     r_state_next = R_RECV;
                 end else begin
                     r_state_next = R_WAIT;
@@ -482,7 +484,7 @@ module dcache (
             end
             R_SEND: begin
                 axi_arvalid = 1;
-                axi_araddr = pending_refill ? pending_refill_addr : io_addr;
+                axi_araddr = pending_refill ? pending_refill_addr : pending_io_addr;
                 axi_arlen = pending_refill ? 7 : 0; // 如果是refill请求则长度为8个数据，否则为1个数据
                 axi_arsize = 2; // 固定数据大小为32位
                 axi_rready = 0;
@@ -505,18 +507,15 @@ module dcache (
     end
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            axi_rready <= 0;
             refill_data <= 0;
             refill_valid <= 0;
         end else begin
             case (r_state)
                 R_WAIT: begin
-                    axi_rready <= 0;
                     refill_data <= 0;
                     refill_valid <= 0;
                 end
                 R_RECV: begin
-                    axi_rready <= 1;
                     if (axi_rvalid && r_req_is_refill) begin
                         refill_data <= {axi_rdata, refill_data[255:32]}; // 累积接收数据
                         if (axi_rlast) begin
@@ -530,7 +529,6 @@ module dcache (
                     end  
                 end
                 default: begin
-                    axi_rready <= 0;
                     refill_data <= 0;
                     refill_valid <= 0;
                 end
